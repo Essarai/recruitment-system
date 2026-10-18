@@ -26,5 +26,5 @@ export function visibleState(state,user,userList,revision){
  if(user.role==='HR')return {...structuredClone(state),applications:state.applications.map(a=>({...structuredClone(a),rounds:a.rounds.map(r=>({...structuredClone(r),feedback:['none','draft','returned'].includes(r.feedback.status)?{status:r.feedback.status,returnReason:r.feedback.returnReason||''}:r.feedback}))})),users:userList,revision};
  const applications=state.applications.filter(a=>canReviewResume(a,user)||a.rounds.some(r=>r.time&&r.interviewer===user.name)).map(a=>({...a,screening:canReviewResume(a,user)?a.screening:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>r.time&&r.interviewer===user.name).map(r=>{const {feedbackVersions,...own}=r;return own;})}));
  const ids=new Set(applications.map(a=>a.candidateId));
- return {candidates:state.candidates.filter(c=>ids.has(c.id)).map(c=>{const {notes,...safe}=c;return safe;}),applications,templates:[],users:[user],revision};
+ return {candidates:state.candidates.filter(c=>ids.has(c.id)).map(c=>{const {notes,resumes,...safe}=c;return safe;}),applications,templates:[],users:[user],revision};
 }

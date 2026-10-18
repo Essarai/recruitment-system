@@ -89,3 +89,9 @@ test('草稿/待反馈不终止，任意轮正式不通过终止；保留其他�
  app.rounds[1].feedback.status='returned';assert.equal(terminateFailedApplication(app),false);assert.equal(app.status,'未录用');
  const overdue=seed().applications[0];overdue.rounds[1].feedback={status:'submitted',conclusion:'建议不通过',summary:'不匹配'};terminateFailedApplication(overdue,'面试官',now);assert.equal(overdue.rounds[0].cancelled,false);
 });
+
+test('重新捞起的可选简历合并候选人更新版本及全部应聘，按时间排序并按文件 ID 去重',async()=>{
+ const {candidateResumes}=await import('../src/model.js');
+ const candidate={id:'c',resumes:[{id:'new',name:'new.pdf',uploadedAt:'2026-10-18T00:00:00Z'}]},apps=[{candidateId:'c',resume:{id:'old',name:'old.pdf'},history:[{at:'2026-10-17T00:00:00Z',action:'创建应聘'}]},{candidateId:'c',resume:{id:'old',name:'old.pdf'},history:[]},{candidateId:'other',resume:{id:'private'},history:[]}];
+ assert.deepEqual(candidateResumes(candidate,apps).map(f=>f.id),['new','old']);assert.equal(apps[0].resume.uploadedAt,undefined);assert.deepEqual(candidateResumes(undefined,apps),[]);
+});

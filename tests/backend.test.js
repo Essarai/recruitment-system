@@ -54,3 +54,22 @@ test('终止的原应聘不能重新推送/排期；重新捞起创建新 ID 并
  const reopen=structuredClone(view);reopen.applications[0].status='进行中';assert.throws(()=>validateHRState(original,reopen,['面试官甲','面试官乙'],[file],'HR'));
  const resend=structuredClone(view);resend.applications[0].screening={status:'pending',interviewer:'面试官甲'};assert.throws(()=>validateHRState(original,resend,['面试官甲','面试官乙'],[file],'HR'),/结束/);
 });
+
+test('更新候选人简历保留应聘快照和历史版本；面试官看不到档案中的其他简历',()=>{
+ const previous=state(),next=structuredClone(previous),newFile={id:'file2',name:'new.pdf',mime:'application/pdf',size:200};
+ next.candidates[0].resumes=[{id:newFile.id,name:'forged.pdf'}];
+ const saved=validateHRState(previous,next,['面试官甲','面试官乙'],[file,newFile],'HR');
+ assert.equal(saved.candidates[0].resumes[0].name,'new.pdf');assert.ok(saved.candidates[0].resumes[0].uploadedAt);assert.deepEqual(saved.applications[0].resume,previous.applications[0].resume);
+ const visible=visibleState(saved,{name:'面试官甲',role:'interviewer'},[],1);assert.equal(visible.candidates[0].resumes,undefined);assert.equal(visible.applications[0].resume.id,file.id);
+ const missing=structuredClone(saved);missing.candidates[0].resumes=[];assert.throws(()=>validateHRState(saved,missing,['面试官甲','面试官乙'],[file,newFile],'HR'),/不能删除/);
+ const unknown=structuredClone(previous);unknown.candidates[0].resumes=[{id:'unknown'}];assert.throws(()=>validateHRState(previous,unknown,['面试官甲','面试官乙'],[file],'HR'),/附件不存在/);
+});
+
+test('流程 JD 可选且有长度校验；应聘取服务端模板快照，模板修改或伪造请求不改写历史',()=>{
+ const c={id:'c',name:'候选人',phone:'13800138000',education:'普本'},template={id:'t',name:'产品经理',jd:'负责产品规划\n要求业务分析能力',nodes:[{name:'初试',interviewer:''}]};
+ const input={candidates:[c],templates:[template],applications:[{id:'a',candidateId:'c',templateId:'t',job:template.name,jd:'客户端伪造',status:'进行中',reason:'',resume:{id:file.id},rounds:[{...round('初试'),id:'r'}]}]};
+ const saved=validateHRState(emptyState(),input,[],[file],'HR');assert.equal(saved.applications[0].jd,template.jd);
+ const changed=structuredClone(saved);changed.templates[0].jd='新的岗位职责';changed.applications[0].jd='伪造改写';const updated=validateHRState(saved,changed,[],[file],'HR');assert.equal(updated.applications[0].jd,template.jd);assert.equal(updated.templates[0].jd,'新的岗位职责');
+ const optional=structuredClone(input);delete optional.templates[0].jd;assert.equal(validateHRState(emptyState(),optional,[],[file],'HR').applications[0].jd,'');
+ const oversized=structuredClone(input);oversized.templates[0].jd='a'.repeat(20001);assert.throws(()=>validateHRState(emptyState(),oversized,[],[file],'HR'),/JD/);
+});

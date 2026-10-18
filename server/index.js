@@ -56,7 +56,7 @@ app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>{
   if(req.body.revision!==revision){await conn.rollback();return res.status(409).json({error:'数据已被他人更新，请刷新页面后重试；本次修改尚未保存'});}
   // Fetch both validation lists in one round trip on the transaction connection.
   const [context]=await conn.query(`SELECT 'user' AS kind,id,username,name,role,NULL AS mime,NULL AS size FROM recruitment_users
-   UNION ALL SELECT 'file',id,NULL,name,NULL,mime,size FROM recruitment_files`);
+   UNION ALL SELECT 'file',id,NULL,name,NULL,mime,size FROM recruitment_files WHERE object_key LIKE 'resumes/%'`);
   const userList=context.filter(row=>row.kind==='user').map(({id,username,name,role})=>({id,username,name,role}));
   const files=context.filter(row=>row.kind==='file');
   const state=validateHRState(previous,req.body,userList.filter(u=>u.role==='interviewer').map(u=>u.name),files,req.user.name);
@@ -97,7 +97,7 @@ app.get('/api/transcripts/:id',async(req,res)=>{
 });
 
 async function authorizeResume(req,res,next){
- const {state}=await readState(pool);const allowed=state.applications.some(a=>a.resume?.id===req.params.id&&canAccessResume(a,req.user));
+ const {state}=await readState(pool);const allowed=state.applications.some(a=>a.resume?.id===req.params.id&&canAccessResume(a,req.user))||(req.user.role==='HR'&&state.candidates.some(c=>c.resumes?.some(f=>f.id===req.params.id)));
  if(!allowed)return res.status(404).json({error:'简历不存在或无权访问'});
  const [[file]]=await pool.execute('SELECT * FROM recruitment_files WHERE id=?',[req.params.id]);if(!file)return res.status(404).json({error:'简历不存在'});req.resumeFile=file;next();
 }

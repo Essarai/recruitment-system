@@ -119,3 +119,8 @@ export function terminateFailedApplication(app,actor='系统',now=new Date().toI
 export function stopFutureRounds(app,now=new Date().toISOString()){
  for(const r of app.rounds)if(r.feedback.status!=='submitted'&&(!r.time||new Date(r.time)>new Date(now)))r.cancelled=true;
 }
+
+export function candidateResumes(candidate,applications){
+ const seen=new Set(),versions=[...(candidate?.resumes||[]),...applications.filter(a=>a.candidateId===candidate?.id&&a.resume?.id).map(a=>({...a.resume,uploadedAt:a.history?.find(h=>h.action.startsWith('创建应聘'))?.at||''}))];
+ return versions.sort((a,b)=>(Date.parse(b.uploadedAt)||0)-(Date.parse(a.uploadedAt)||0)).filter(file=>file?.id&&!seen.has(file.id)&&seen.add(file.id));
+}

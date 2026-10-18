@@ -37,3 +37,5 @@ Application termination clarified 2026-10-18: every application-list row uses �
 Action sizing clarified 2026-10-18: repeated list/detail row actions such as 查看详情 use compact 28 px controls with 3 px vertical / 10 px horizontal padding and the shared 14 px body type. Keep page-level primary actions and dialog submissions at their established size.
 
 List action style confirmed 2026-10-18: application-list actions use the same borderless blue text-button style as the resume library, including its compact spacing and shared type scale.
+
+Resume library columns clarified 2026-10-18: reserve a fixed 276 px action column and keep archive/edit/recall actions in a single horizontal row. Allocate 20% to candidate details, 22% to contact details, 150 px to attachments, and remaining space to application summary; use horizontal table scrolling on narrow screens instead of wrapping actions.

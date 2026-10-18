@@ -21,3 +21,13 @@ test('仅待确认和到期/退回欠评提示待处理；已取消、已提交�
  data.applications[1]={id:'waiting',candidateId:'work',status:'进行中',screening:{status:'accepted',interviewer:'甲'},rounds:[]};
  const waiting=interviewGroups(data,'甲','待处理',now)[0];assert.equal(waiting.reviews,0);assert.equal(waiting.waiting,1);assert.equal(waiting.applications[0].screening,true);assert.equal(waiting.roundCount,0);
 });
+
+test('待办有明确应聘/轮次目标，草稿无需等到排期结束；未来安排与 HR 待排期不混入待办',()=>{
+ const data={candidates:[{id:'c',name:'候选人'}],applications:[
+  {id:'review',candidateId:'c',status:'进行中',screening:{interviewer:'甲',status:'pending'},rounds:[]},
+  {id:'scheduled',candidateId:'c',status:'进行中',rounds:[round('due','甲','2026-10-17'),round('draft','甲','2026-10-20','draft'),round('future','甲','2026-10-21'),round('done','甲','2026-10-17','submitted'),round('cancelled','甲','2026-10-17','none',true)]},
+  {id:'waiting',candidateId:'c',status:'进行中',screening:{interviewer:'甲',status:'accepted'},rounds:[]},
+  {id:'ended',candidateId:'c',status:'未录用',rounds:[round('ended-future','甲','2026-10-20')]}
+ ]};
+ const [g]=interviewGroups(data,'甲','',now);assert.equal(g.tasks.length,3);assert.deepEqual(g.tasks.map(t=>[t.kind,t.app.id,t.round?.id]),[['screening','review',undefined],['feedback','scheduled','due'],['feedback','scheduled','draft']]);assert.deepEqual(g.upcoming.map(t=>t.round.id),['draft','future']);assert.equal(g.reviews,1);assert.equal(g.feedback,2);assert.equal(g.waiting,1);
+});

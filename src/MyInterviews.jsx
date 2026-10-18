@@ -1,21 +1,32 @@
-import React from 'react';
+import React,{useState} from 'react';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
 import {applicationStatus,roundTone} from './model';
 import {interviewGroups} from './interview-groups';
 
 export function MyInterviews({data,person,query,refresh,open,accept,busy,date,feedbackLabel}){
+ const [view,setView]=useState('todo');
  const groups=interviewGroups(data,person,query);
- return <section className="my-interviews"><div className="title-row"><div><h1>我的面试</h1><p className="muted">按候选人查看，展开后处理简历确认、各轮面试与面评</p></div><button onClick={refresh}>刷新列表</button></div>
-  <PaginatedList items={groups} resetKey={query} label="面试候选人">{rows=>rows.map(group=><details className="interview-candidate" key={group.candidate.id}>
-   <summary><div className="interview-candidate-name"><h2>{group.candidate.name}</h2><span className="muted">{[group.candidate.age?`${group.candidate.age}岁`:'',group.candidate.education,group.candidate.currentTitle].filter(Boolean).join(' · ')}</span></div><div className="interview-candidate-counts"><span>{group.applications.length} 次应聘 · {group.roundCount?`${group.roundCount} 轮面试`:'尚未排期'}</span>{group.waiting>0&&<span className="stage-label stage-pending">待 HR 排期</span>}{group.reviews>0&&<span className="stage-label stage-pending">{group.reviews} 份简历待确认</span>}{group.feedback>0&&<span className="stage-label stage-feedback">{group.feedback} 份面评待处理</span>}<span className="expand-hint" aria-hidden="true"/></div></summary>
+ const counts={todo:groups.reduce((n,g)=>n+g.tasks.length,0),upcoming:groups.reduce((n,g)=>n+g.upcoming.length,0),all:groups.length};
+ const visible=groups.filter(g=>view==='todo'?g.tasks.length:view==='upcoming'?g.upcoming.length:true);
+ return <section className="my-interviews"><div className="title-row"><div><h1>我的面试</h1><p className="muted">先处理需要你确认的简历和面评，其他记录按需查看</p></div><button onClick={refresh}>刷新列表</button></div>
+  <div className="interview-views" aria-label="面试工作视图">{[['todo','待我处理','项'],['upcoming','即将面试','场'],['all','全部候选人','人']].map(([key,label,unit])=><button key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}<span>{counts[key]} {unit}</span></button>)}</div>
+  <p className="muted work-view-hint">{view==='todo'?'直接处理下方事项，无需展开历史。待 HR 排期和已提交面评不计入待办。':view==='upcoming'?'查看尚未开始、尚未提交面评的有效安排。': '保留每位候选人的应聘、简历确认和各轮面试记录。'}</p>
+  {visible.length>0&&<PaginatedList items={visible} resetKey={`${query}-${view}`} label="面试候选人">{rows=>rows.map(group=><article className="interview-work-card" key={group.candidate.id}>
+   <div className="interview-work-heading"><div className="interview-candidate-name"><h2>{group.candidate.name}</h2><span className="muted">{[group.candidate.education,group.candidate.currentTitle].filter(Boolean).join(' · ')}</span></div><span className={`stage-label stage-${view==='upcoming'?'interview':group.tasks.length?'pending':'neutral'}`}>{view==='upcoming'?`${group.upcoming.length} 场待面试`:group.tasks.length?`${group.tasks.length} 项待处理`:group.waiting?'待 HR 排期':'暂无待办'}</span></div>
+   <div className="interview-visible-tasks">{(view==='upcoming'?group.upcoming:group.tasks).map(task=><div className="interview-task" key={`${task.app.id}-${task.round?.id||'screening'}`}>
+    <div className="interview-task-content"><div className="interview-round-heading"><span className={`stage-label stage-${task.kind==='screening'?'pending':task.kind==='upcoming'?'interview':'feedback'}`}>{task.kind==='screening'?'待确认简历':task.kind==='upcoming'?'待面试':task.round.feedback.status==='returned'?'面评需修改':task.round.feedback.status==='draft'?'面评草稿待完善':'待填面评'}</span><strong>{task.app.job}{task.round?` · ${task.round.name}`:' · 首轮简历确认'}</strong></div><p className="muted">{task.kind==='screening'?'请查看简历，确认是否接受首轮面试。':`${date(task.round.time)} · ${task.kind==='upcoming'?'按安排参加面试':task.round.feedback.status==='returned'?`退回原因：${task.round.feedback.returnReason||'请查看面评'}`:task.round.feedback.status==='draft'?'已有草稿，核对后继续填写':'面试时间已过，请确认实际完成后填写面评'}`}</p></div>
+    <div className="actions"><ResumeLink app={task.app} className="text-button">查看简历</ResumeLink>{task.kind==='screening'?<><button className="text-button" disabled={busy} onClick={()=>open('screeningDecision',{appId:task.app.id})}>不通过</button><button className="task-primary" disabled={busy} onClick={()=>accept(task.app.id)}>接受面试</button></>:task.kind==='upcoming'?(task.round.mode==='线上'?<a className="resume-link" href={task.round.location} target="_blank" rel="noreferrer">加入会议</a>:<span className="muted">{task.round.location}</span>):<button className="task-primary" onClick={()=>open('feedback',{appId:task.app.id,roundId:task.round.id})}>{task.round.feedback.status==='returned'?'修改面评':task.round.feedback.status==='draft'?'继续填写':'填写面评'}</button>}</div>
+   </div>)}</div>
+   <details className="interview-candidate">
+   <summary><span>{view==='all'?'应聘与面试记录':'完整记录'} · {group.applications.length} 次应聘 · {group.roundCount} 轮面试</span><span className="expand-hint" aria-hidden="true"/></summary>
    <div className="interview-candidate-records">{group.applications.map(({app,rounds,screening})=><section className="interview-application" key={app.id}>
     <div className="interview-application-heading"><div><h3>{app.job}</h3><span className={`stage-label stage-${app.status==='进行中'?'interview':app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'}`}>{applicationStatus(app)}</span></div><ResumeLink app={app} className="text-button">查看本次简历</ResumeLink></div>
     {app.jd&&<details className="job-description"><summary>岗位 JD</summary><p>{app.jd}</p></details>}
     {screening&&<div className="interview-child"><div><h3>首轮简历确认</h3><p className="muted">{app.screening.status==='pending'?'待你确认是否参加首轮面试':'已接受，等待 HR 协调时间并安排面试'}</p></div>{app.screening.status==='pending'&&<div className="actions"><button className="text-button" disabled={busy} onClick={()=>open('screeningDecision',{appId:app.id})}>不通过</button><button disabled={busy} onClick={()=>accept(app.id)}>接受面试</button></div>}</div>}
     {rounds.map(r=><article className="interview-child" key={r.id}><div className="interview-child-content"><div className="interview-round-heading"><h3>{r.name}</h3><span className={`stage-label stage-${roundTone(r)}`}>{feedbackLabel(r)}</span></div><p className="muted">{date(r.time)}{r.time&&!r.cancelled&&<> · {r.mode==='线上'?<a href={r.location} target="_blank" rel="noreferrer">加入会议</a>:<>面试地点：{r.location}</>}</>}</p>{r.focus&&<p className="muted">考察重点：{r.focus}</p>}{app.status!=='进行中'&&!r.cancelled&&r.feedback.status!=='submitted'&&<p className="muted">流程已结束，已实际完成的本轮面试仍可补交面评。</p>}</div><div className="actions">{!r.cancelled&&<button className="text-button" onClick={()=>open('feedback',{appId:app.id,roundId:r.id})}>{r.feedback.status==='submitted'?'查看面评':'填写面评'}</button>}</div></article>)}
    </section>)}</div>
-  </details>)}</PaginatedList>
-  {!groups.length&&<div className="empty">{query?'没有匹配的候选人':'暂无待确认简历或已安排的面试'}</div>}
+  </details></article>)}</PaginatedList>}
+  {!visible.length&&<div className="empty interview-empty"><h2>{query?'没有匹配的记录':view==='todo'?'当前没有需要你处理的事项':view==='upcoming'?'暂无即将开始的面试':'暂无候选人记录'}</h2><p>{view==='todo'?'已接受的简历由 HR 继续排期；已提交的面评保存在完整记录中。':'可切换视图或调整搜索条件。'}</p>{view!=='all'&&<button className="text-button" onClick={()=>setView('all')}>查看全部候选人</button>}</div>}
  </section>;
 }

@@ -1,0 +1,85 @@
+import {seed} from './fixtures.js';
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {pending,validateSchedule,submitFeedback,endApplication} from '../src/model.js';
+test('下一轮安排不清除上一轮面评，模板修改不影响已有轮次',()=>{const s=seed(),a=s.applications[0];assert.equal(pending(a),2);validateSchedule(a,a.rounds[1],{interviewer:'周宁',time:'2026-10-20T14:00',mode:'线上',location:'https://example.com'});assert.equal(a.rounds[0].feedback.status,'none');s.templates[0].nodes[0]='筛选';assert.equal(a.rounds[0].name,'初试');});
+test('提交要求本人、完成确认和必填字段；不自动推进',()=>{const a=seed().applications[0],r=a.rounds[0],f={summary:'依据充分',conclusion:'建议通过'};assert.throws(()=>submitFeedback(a,r,'周宁',f,true));assert.throws(()=>submitFeedback(a,r,'陈晨',f,false));assert.equal(submitFeedback(a,r,'陈晨',f,true).status,'submitted');assert.equal(a.status,'进行中');r.cancelled=true;assert.throws(()=>submitFeedback(a,r,'陈晨',f,true));});
+test('结束允许欠评，禁止新增安排，允许原面试官补交',()=>{const a=seed().applications[0];assert.throws(()=>endApplication(a,'公司决定录用',''));const ended=endApplication(a,'公司决定录用','确认录用');assert.equal(pending(ended),2);assert.throws(()=>validateSchedule(ended,ended.rounds[2],{}));assert.equal(submitFeedback(ended,ended.rounds[0],'陈晨',{summary:'补交',conclusion:'建议通过'},true).status,'submitted');});
+
+test('会议链接允许 HR 手动输入常见会议 URL，拒绝非网页协议和无效地址',()=>{const a=seed().applications[0],r=a.rounds[1];for(const location of ['https://meeting.tencent.com/dm/demo','https://meet.feishu.cn/demo?code=123'])validateSchedule(a,r,{interviewer:r.interviewer,time:r.time,mode:'线上',location});for(const location of ['javascript:alert(1)','https://','https://user:secret@example.com'])assert.throws(()=>validateSchedule(a,r,{interviewer:r.interviewer,time:r.time,mode:'线上',location}));});
+test('候选人扩展资料兼容旧记录，清理空白且不混入应聘字段',async()=>{const {candidateDetails}=await import('../src/model.js');assert.equal(candidateDetails({}).company,'');assert.deepEqual(candidateDetails({company:' 示例公司 ',experience:'5 年',notes:' 待沟通 ',job:'PM'}),{age:'',experience:'5 年',company:'示例公司',currentTitle:'',education:'',city:'',notes:'待沟通'});});
+
+test('年龄选填并拒绝负数、小数与异常值',async()=>{const {candidateDetails}=await import('../src/model.js');assert.equal(candidateDetails({age:'28',education:'本科'}).age,'28');for(const age of ['-1','28.5','121','未知'])assert.throws(()=>candidateDetails({age}));assert.equal(candidateDetails({age:''}).age,'');});
+
+
+test('节点可指定默认面试官，旧模板兼容，实例与模板相互独立',async()=>{
+ const {roundsFromTemplate,templateNodes}=await import('../src/model.js');
+ const template={nodes:[{name:' 初试 ',interviewer:'陈晨'},{name:'复试',interviewer:'周宁'}]};
+ const first=roundsFromTemplate(template),second=roundsFromTemplate(template);
+ assert.equal(first[0].name,'初试');assert.equal(first[1].interviewer,'周宁');assert.equal(first[0].time,'');assert.equal(pending({rounds:first}),0);
+ template.nodes[0].interviewer='李强';assert.equal(first[0].interviewer,'陈晨');first[0].interviewer='李强';assert.equal(second[0].interviewer,'陈晨');assert.notEqual(first[0].id,second[0].id);
+ assert.deepEqual(templateNodes(['初试','终试']),[{name:'初试',interviewer:''},{name:'终试',interviewer:''}]);
+ for(const nodes of [[],[{name:'',interviewer:''}],[{name:'初试',interviewer:'未知'}],['初试',' 初试 ']])assert.throws(()=>templateNodes(nodes,['陈晨','周宁','李强']));
+});
+
+test('手机号和邮箱校验：至少一项、大陆手机格式、常见邮箱格式',async()=>{
+ const {validateContacts}=await import('../src/model.js');
+ assert.deepEqual(validateContacts({phone:' 13800138000 ',email:''}),{phone:'13800138000',email:''});
+ for(const email of ['a@example.com','user+hr@example.co.uk',"o'brien@example.com"])assert.equal(validateContacts({email}).email,email);
+ for(const v of [{},{phone:'123'},{phone:'23800138000'},{email:'a@b'},{email:'a..b@example.com'},{email:'a@-example.com'},{email:'a,b@example.com'},{email:'a@ex ample.com'},{phone:'wrong',email:'a@example.com'}])assert.throws(()=>validateContacts(v));
+});
+test('学历只接受九种指定分类，未填写和旧分类不得用于新保存',async()=>{const {candidateDetails,educationOptions}=await import('../src/model.js');assert.deepEqual(educationOptions,['双九硕','单九硕','双二硕','单二硕','双非硕','九本','211本','普本','大专']);for(const education of educationOptions)assert.equal(candidateDetails({education},true).education,education);for(const education of ['',undefined,'本科','硕士'])assert.throws(()=>candidateDetails({education},true));});
+test('候选人有进行中应聘时不可创建新应聘，结束后允许再次应聘',async()=>{const {canCreateApplication}=await import('../src/model.js');assert.equal(canCreateApplication([{candidateId:'c',status:'进行中'}],'c'),false);assert.equal(canCreateApplication([{candidateId:'c',status:'未录用'}],'c'),true);assert.equal(canCreateApplication([{candidateId:'other',status:'进行中'}],'c'),true);});
+
+test('简历库阶段按轮次和面评计算，不把已结束流程或欠交面评显示为下一轮',async()=>{
+ const {applicationStage,round}=await import('../src/model.js');
+ const app={status:'进行中',rounds:[round('初试'),round('复试'),round('终面')]};
+ const now=Date.parse('2026-10-17T12:00:00Z');
+ assert.equal(applicationStage(app,now).name,'待推送简历');
+ app.rounds[0].time='2026-10-18T12:00:00Z';assert.match(applicationStage(app,now).detail,/待面试/);
+ app.rounds[0].time='2026-10-16T12:00:00Z';app.rounds[1].time='2026-10-19T12:00:00Z';assert.equal(applicationStage(app,now).name,'初试');assert.match(applicationStage(app,now).detail,/待提交面评/);
+ app.rounds[0].feedback.status='returned';assert.match(applicationStage(app,now).detail,/面评待修改/);
+ app.rounds[0].cancelled=true;assert.match(applicationStage(app,now).detail,/待重新安排/);
+ app.rounds[0].feedback.status='submitted';assert.equal(applicationStage(app,now).name,'复试');assert.match(applicationStage(app,now).detail,/第 2 \/ 3 轮/);
+ for(const r of app.rounds)r.feedback.status='submitted';assert.equal(applicationStage(app,now).name,'待 HR 决策');
+ app.status='未录用';assert.equal(applicationStage(app,now).name,'未录用');assert.equal(applicationStage(undefined).name,'未创建应聘');
+});
+
+test('应聘工作列表给出当前可执行动作；旧面评未交不阻止安排下一轮',async()=>{
+ const {applicationAction,round}=await import('../src/model.js');const now=Date.parse('2026-10-18T10:00:00Z');
+ const app={status:'进行中',rounds:[round('初试'),round('复试')]};
+ assert.deepEqual(applicationAction(app,now),{type:'screening',label:'推送简历'});
+ app.screening={status:'pending',interviewer:'甲'};assert.equal(applicationAction(app,now).type,'view');
+ app.screening.status='declined';assert.equal(applicationAction(app,now).label,'重新推送');
+ app.screening.status='accepted';assert.deepEqual(applicationAction(app,now),{type:'schedule',label:'安排首轮',roundId:app.rounds[0].id});
+ app.rounds[0].time='2026-10-20T10:00:00Z';assert.equal(applicationAction(app,now).label,'查看安排');
+ app.rounds[0].time='2026-10-17T10:00:00Z';assert.deepEqual(applicationAction(app,now),{type:'schedule',label:'安排复试',roundId:app.rounds[1].id});
+ app.rounds[1].time='2026-10-17T12:00:00Z';assert.equal(applicationAction(app,now).label,'查看待交面评');
+ for(const r of app.rounds)r.feedback.status='submitted';assert.deepEqual(applicationAction(app,now),{type:'end',label:'记录应聘结果'});
+ app.status='未录用';assert.deepEqual(applicationAction(app,now),{type:'view',label:'查看结果'});
+});
+
+test('进度颜色按实际待办区分，提交面评和录用不混为正在面试',async()=>{
+ const {applicationStage,roundTone,round}=await import('../src/model.js');const now=Date.parse('2026-10-18T10:00:00Z');
+ const app={status:'进行中',screening:{status:'pending'},rounds:[round('初试')]};
+ assert.equal(applicationStage(app,now).tone,'pending');
+ app.screening.status='declined';assert.equal(applicationStage(app,now).tone,'danger');
+ app.screening.status='accepted';assert.equal(applicationStage(app,now).tone,'pending');
+ const r=app.rounds[0];r.time='2026-10-19T10:00:00Z';assert.equal(applicationStage(app,now).tone,'interview');
+ r.time='2026-10-17T10:00:00Z';assert.equal(applicationStage(app,now).tone,'feedback');
+ r.feedback.status='returned';assert.equal(roundTone(r,now),'danger');
+ r.cancelled=true;assert.equal(roundTone(r,now),'neutral');r.cancelled=false;
+ r.feedback.status='submitted';assert.equal(roundTone(r,now),'success');assert.equal(applicationStage(app,now).tone,'pending');
+ app.status='公司决定录用';assert.equal(applicationStage(app,now).tone,'success');
+ app.status='未录用';assert.equal(applicationStage(app,now).tone,'danger');
+ app.status='候选人退出';assert.equal(applicationStage(app,now).tone,'neutral');
+});
+
+test('分段进度按实际面评完成，不因时间已过、安排后续轮次或结束而补满',async()=>{
+ const {applicationProgress,round}=await import('../src/model.js');const now=Date.parse('2026-10-18T10:00:00Z');
+ const app={status:'进行中',screening:{status:'pending'},rounds:[round('一面'),round('二面')]};
+ let steps=applicationProgress(app,now);assert.deepEqual(steps.map(s=>s.name),['简历确认','一面','二面','结果']);assert.equal(steps[0].active,true);assert.equal(steps.filter(s=>s.done).length,0);
+ app.screening.status='accepted';assert.equal(applicationProgress(app,now)[0].done,true);
+ app.rounds[0].time='2026-10-17T10:00:00Z';app.rounds[1].time='2026-10-20T10:00:00Z';steps=applicationProgress(app,now);assert.equal(steps[1].done,false);assert.equal(steps[1].tone,'feedback');assert.equal(steps[2].active,true);
+ app.rounds[1].feedback.status='submitted';steps=applicationProgress(app,now);assert.equal(steps[1].done,false);assert.equal(steps[2].done,true);
+ app.status='未录用';steps=applicationProgress(app,now);assert.equal(steps[1].done,false);assert.equal(steps.at(-1).done,true);assert.equal(steps.at(-1).tone,'danger');assert.ok(steps.every(s=>!s.active));
+});

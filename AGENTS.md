@@ -1,0 +1,31 @@
+# Prototype Instructions
+
+Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
+
+Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
+
+When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
+
+Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts/prepare-sites-build.mjs`, and `tests/sites-worker.test.mjs` intact so the same local prototype can be handed to Sites. Before a Sites handoff, run `npm run build` and `npm run test:sites`; the build must leave `dist/client/index.html`, `dist/server/index.js`, and `dist/.openai/hosting.json`.
+
+Product rules confirmed 2026-10-17: candidate education is required from the nine specified categories; validate mainland mobile/email formats; new application job snapshots the selected workflow name; a candidate with any ongoing application cannot create another. File preview/download access uses short-lived authorized presigned URLs. Preserve historical applications when templates are renamed.
+
+Resume library design: keep the approved Google-style restrained typography and blue/gray palette. Show workflow/job and actual interview round in separate columns, including arrangement/feedback state. The actions column contains actions only; hide create-application while any application is ongoing rather than showing a disabled status button. Prefer the active application and retain accessible history.
+
+Typography: one shared system font stack and a 24 / 20 / 14 / 12 px scale for page titles, dialog/section titles, body and controls, and captions. Do not change type sizes per page or breakpoint; use spacing and wrapping for responsive layouts. Heading weights 500/600, body/actions 400, secondary captions 400.
+
+Recruitment workflow confirmed 2026-10-18: only the first round requires resume acceptance. HR saves and pushes the resume to a selected business interviewer; this person may view it before scheduling and accept or return with a reason. HR schedules the first round only after acceptance and with that interviewer. Later rounds retain direct HR scheduling. Returning a resume leaves HR to reassign or end the application. Preserve existing scheduled legacy interviews without retroactive acceptance.
+
+Resume preview preference confirmed 2026-10-18: open PDFs directly in the browser's native reader in a new tab. Use the authenticated resume redirect to freshly signed private URLs; do not embed a custom PDF renderer or expose persistent public object URLs. Word stays an attachment download.
+
+PDF import autofill: extract text on the backend locally, without sending resumes to third-party AI. Fill only empty, unedited fields and keep HR review before save/push. Never infer the nine education categories from degree or university names; only fill an explicit exact category and otherwise ask HR to confirm. Changing files removes untouched values auto-filled from the previous file; stale parsing responses must not affect the new file. Scanned/encrypted/unsupported PDFs fall back to manual entry. Keep native browser preview separate from backend PDF text extraction.
+
+Page roles confirmed 2026-10-18: application list is the work queue for advancing each application, with contextual next actions and feedback/scheduling information. Resume library is one row per candidate, emphasizing profile, application count and resume versions; current progress is a short summary only. Candidate archives show every past/current application with its own resume and an explicit link into the application workflow. Keep scheduling and result actions out of the archive. Existing active-application duplicate guard still applies.
+
+Progress color preference confirmed 2026-10-18: use consistent text badges across application list, candidate library/archive and interview rounds. Amber for awaiting action/scheduling/HR decision; blue for scheduled interviews; purple for awaiting feedback; green for submitted feedback/company hiring decision; red for returned/rejected; gray for canceled/withdrawn. Keep text labels and existing typography.
+
+Interview dialogue and MCP confirmed 2026-10-18: each interviewer may optionally attach one complete dialogue document (UTF-8 TXT/Markdown, PDF, DOC/DOCX, up to 20 MB) to their own feedback. Save attachments with drafts; keep drafts and their attachments private to the interviewer. HR may access submitted feedback attachments, including preserved formal versions. Formal feedback stays locked until HR returns it. The interviewer sidebar has a separate MCP entry immediately below My Interviews, opening a dedicated read-only personal Streamable HTTP MCP connection page with one active 30-day token per account, shown once, hashed in MySQL, revocable/resettable and invalidated on password changes. MCP exposes only own interviews, own feedback and authorized short-lived file links; no HR notes, other interviewers' feedback, business writes or automatic submission. Connection tutorial explains custom Bearer headers, localhost versus deployed HTTPS access, and OAuth-client limits.
+
+MCP navigation clarified 2026-10-18: MCP is a standalone interviewer sidebar destination directly below My Interviews; do not embed its connection/token/tutorial controls in the interview list.
+
+Application progress clarified 2026-10-18: the application list uses a segmented progress bar with text for resume confirmation, each actual workflow round, and final result. Mark a round complete only after submitted feedback; elapsed time or a later scheduled round must never fill an earlier missing-feedback segment. Ending an application completes only the result node and preserves actual incomplete interview segments.

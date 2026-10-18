@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+INITIAL_LOGIN.txt
+*.log
+public/pdfjs/
+
+# Local design reviews contain candidate information.
+/*.png
+/*.jpg
+/connection-verification.json
+/design-qa.md
+.DS_Store

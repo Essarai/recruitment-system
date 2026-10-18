@@ -12,7 +12,7 @@ import {initializeDatabase,readState,users,visibleState} from './database.js';
 import {hashPassword,verifyPassword,tokenHash,sessionToken,getSessionCookie,setSessionCookie} from './auth.js';
 import {validateHRState,text} from './validation.js';
 import {MAX_FILE,validateResume,signedResumeAccess,storePrivateFile} from './files.js';
-import {submitFeedback} from '../src/model.js';
+import {submitFeedback,terminateFailedApplication} from '../src/model.js';
 const app=express();app.disable('x-powered-by');if(process.env.NODE_ENV==='production')app.set('trust proxy',1);
 app.use((req,res,next)=>{
  res.set('X-Content-Type-Options','nosniff');if(req.path.startsWith('/api'))res.set('Cache-Control','no-store');
@@ -70,7 +70,8 @@ app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async
   const app=state.applications.find(a=>a.id===req.params.appId);
   if(!app||req.user.role!=='interviewer'||app.screening?.interviewer!==req.user.name){await conn.rollback();return res.status(403).json({error:'无权确认此简历'});}
   app.screening=decideScreening(app,req.user,req.body.decision,req.body.reason||'');
-  app.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:app.screening.status==='accepted'?'接受首轮面试':`简历退回 HR：${app.screening.reason}`});
+  terminateFailedApplication(app,req.user.name);
+  app.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:app.screening.status==='accepted'?'接受首轮面试':`简历筛选不通过：${app.screening.reason}`});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,'确认推荐简历',app.id]);await conn.commit();
   res.json(visibleState(state,req.user,await users(pool),revision+1));
@@ -87,6 +88,7 @@ app.patch('/api/applications/:appId/rounds/:roundId/feedback',express.json({limi
   const transcript=await transcriptReference(conn,input.transcript,r.feedback.transcript,a.id,r.id,req.user);if(transcript)f.transcript=transcript;
   if(req.body.draft)r.feedback={...f,status:r.feedback.status==='returned'?'returned':'draft',author:req.user.name,returnReason:r.feedback.returnReason||''};
   else r.feedback=submitFeedback(a,r,req.user.name,f,req.body.completed===true);
+  if(!req.body.draft)terminateFailedApplication(a,req.user.name);
   a.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:req.body.draft?'保存面评草稿':'提交面评'});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,req.body.draft?'保存面评草稿':'提交面评',r.id]);await conn.commit();res.json(visibleState(state,req.user,await users(pool),revision+1));
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}

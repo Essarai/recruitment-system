@@ -46,3 +46,11 @@ test('首轮简历先推送后接受；HR 不可代接受，未接受不可安�
  const resend=structuredClone(saved);resend.applications[0].screening={status:'pending',interviewer:'乙'};const resent=validateHRState(saved,resend,names,[file],'HR');assert.equal(canAccessResume(resent.applications[0],first),false);assert.equal(canAccessResume(resent.applications[0],other),true);
  const ended={...app,status:'候选人退出'};assert.throws(()=>decideScreening(ended,first,'accepted'));assert.equal(canAccessResume(ended,first),false);
 });
+
+test('终止的原应聘不能重新推送/排期；重新捞起创建新 ID 并保留历史',async()=>{
+ const {terminateFailedApplication}=await import('../src/model.js');
+ const original=state();original.applications[0].screening={status:'declined',reason:'不匹配'};
+ terminateFailedApplication(original.applications[0]);const view=visibleState(original,{role:'HR'},[],1);
+ const reopen=structuredClone(view);reopen.applications[0].status='进行中';assert.throws(()=>validateHRState(original,reopen,['面试官甲','面试官乙'],[file],'HR'));
+ const resend=structuredClone(view);resend.applications[0].screening={status:'pending',interviewer:'面试官甲'};assert.throws(()=>validateHRState(original,resend,['面试官甲','面试官乙'],[file],'HR'),/结束/);
+});

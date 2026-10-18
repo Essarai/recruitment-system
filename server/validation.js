@@ -1,6 +1,6 @@
 import {normalizeScreening} from './screening.js';
 import {isDeepStrictEqual as equal} from 'node:util';
-import {candidateDetails,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,validateFirstSchedule} from '../src/model.js';
+import {candidateDetails,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,validateFirstSchedule,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
 export function text(value,label,max=1000,required=false){if(value==null)value='';if(typeof value!=='string'||value.length>max||(required&&!value.trim()))throw Error(`${label}无效`);return value.trim();}
 function array(value,label,max=5000){if(!Array.isArray(value)||value.length>max)throw Error(`${label}无效`);return value;}
 function id(value){return text(value,'记录 ID',80,true);}
@@ -59,6 +59,8 @@ export function validateHRState(previous,input,interviewers,files,actor){
    const changes=old?next.rounds.flatMap(r=>{const before=old.rounds.find(x=>x.id===r.id);if(!before)return [`新增 ${r.name}`];const fields=[...scheduleKeys,'cancelled'];const updates=fields.filter(k=>before[k]!==r[k]).map(k=>`${k}: ${before[k]||'空'} → ${r[k]||'空'}`);if(r.feedback.status!==before.feedback.status)updates.push(`面评: ${before.feedback.status} → ${r.feedback.status}${r.feedback.returnReason?'；'+r.feedback.returnReason:''}`);return updates.length?[`${r.name}（${updates.join('；')}）`]:[];}):[];
    next.history=[{at:now,actor,action:!old?'创建应聘':old.status!==next.status?`结束应聘：${next.status}；${next.reason}`:(!equal(old?.screening,next.screening)?`推送简历给 ${next.screening?.interviewer||'待指定'}`:changes.join('；'))||'更新应聘记录'},...next.history];
   }
+  if(old?.status==='进行中'&&['未录用','候选人退出'].includes(next.status))stopFutureRounds(next,now);
+  terminateFailedApplication(next,actor);
   return next;
  });
  unique(applications,'应聘记录');preserve(previous.applications,applications,'应聘记录');

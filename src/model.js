@@ -45,12 +45,13 @@ export function submitFeedback(app,r,person,data,completed){
 }
 export function endApplication(app,status,reason){
  if(app.status!=='进行中'||!results.slice(1).includes(status)||!reason.trim()) throw Error('请选择最终结果并填写原因');
- return {...app,status,reason,endedAt:new Date().toISOString()};
+ const ended={...app,status,reason,endedAt:new Date().toISOString(),rounds:app.rounds.map(r=>({...r}))};
+ if(status!=='公司决定录用')stopFutureRounds(ended);return ended;
 }
 
 export function applicationStage(app,now=Date.now()){
  if(!app)return {name:'未创建应聘',detail:'可创建新的应聘记录',tone:'neutral'};
- if(app.status!=='进行中')return {name:app.status,detail:'应聘已结束',tone:app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
+ if(app.status!=='进行中')return {name:applicationStatus(app),detail:app.reason||'应聘已结束',tone:app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
  if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='accepted'?'面试官已接受，可协调时间':s?.status==='pending'?`${s.interviewer} · 等待接受`:s?.status==='declined'?s.reason:'先指定业务面试官查看简历'};}
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
@@ -61,7 +62,7 @@ export function applicationStage(app,now=Date.now()){
 
 export function roundTone(round,now=Date.now()){
  if(round.cancelled)return 'neutral';
- if(round.feedback.status==='submitted')return 'success';
+ if(round.feedback.status==='submitted')return round.feedback.conclusion==='建议不通过'?'danger':'success';
  if(round.feedback.status==='returned')return 'danger';
  if(!round.time)return 'pending';
  return new Date(round.time).getTime()<=now?'feedback':'interview';
@@ -75,8 +76,8 @@ export function validateFirstSchedule(app,data){
 }
 export function reviewResume(app,person,decision,reason=''){
  if(app.status!=='进行中'||app.screening?.status!=='pending'||app.screening.interviewer!==person)throw Error('该简历不在你的待确认列表中，请刷新后重试');
- if(!['accepted','declined'].includes(decision))throw Error('请选择接受面试或退回 HR');
- if(typeof reason!=='string'||reason.length>2000||(decision==='declined'&&!reason.trim()))throw Error('退回 HR 时请填写原因（不超过 2000 字）');
+ if(!['accepted','declined'].includes(decision))throw Error('请选择接受面试或不通过');
+ if(typeof reason!=='string'||reason.length>2000||(decision==='declined'&&!reason.trim()))throw Error('不通过时请填写原因（不超过 2000 字）');
  return {...app.screening,status:decision,reason:decision==='declined'?reason.trim():'',reviewedAt:new Date().toISOString(),reviewedBy:person};
 }
 
@@ -90,19 +91,6 @@ export function mergeResumeFields(current,parsed,edited=new Set(),previous={}){
  return next;
 }
 
-export function applicationAction(app,now=Date.now()){
- if(app.status!=='进行中')return {type:'view',label:'查看结果'};
- if(needsScreening(app)&&!app.rounds[0]?.time){
-  if(app.screening?.status==='pending')return {type:'view',label:'查看确认进度'};
-  if(app.screening?.status==='accepted')return {type:'schedule',label:'安排首轮',roundId:app.rounds[0].id};
-  return {type:'screening',label:app.screening?.status==='declined'?'重新推送':'推送简历'};
- }
- if(app.rounds.some(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted'&&new Date(r.time).getTime()>now))return {type:'view',label:'查看安排'};
- const unscheduled=app.rounds.find(r=>(!r.time||r.cancelled)&&r.feedback.status!=='submitted');
- if(unscheduled)return {type:'schedule',label:`安排${unscheduled.name}`,roundId:unscheduled.id};
- if(app.rounds.some(r=>!r.cancelled&&r.feedback.status!=='submitted'))return {type:'view',label:'查看待交面评'};
- return {type:'end',label:'记录应聘结果'};
-}
 
 export function applicationProgress(app,now=Date.now()){
  const stage=applicationStage(app,now),ended=app.status!=='进行中';
@@ -112,4 +100,22 @@ export function applicationProgress(app,now=Date.now()){
   ...app.rounds.map(r=>({id:r.id,name:r.name,done:r.feedback.status==='submitted',active:!ended&&r.feedback.status!=='submitted'&&(stage.round?.id===r.id||!!r.time&&!r.cancelled),tone:roundTone(r,now)})),
   {id:'result',name:'结果',done:ended,active:!ended&&app.rounds.every(r=>r.feedback.status==='submitted'),tone:stage.tone}
  ];
+}
+
+export const applicationStatus=app=>app.status==='公司决定录用'?'已录用':['未录用','候选人退出'].includes(app.status)?'流程终止':'进行中';
+export function applicationFailure(app){
+ if(app.screening?.status==='declined')return {reason:`简历筛选不通过：${app.screening.reason}`,at:app.screening.reviewedAt};
+ const round=app.rounds.find(r=>r.feedback.status==='submitted'&&r.feedback.conclusion==='建议不通过');
+ return round?{reason:`${round.name}不通过：${round.feedback.summary}`,at:round.feedback.submittedAt}:null;
+}
+export function terminateFailedApplication(app,actor='系统',now=new Date().toISOString()){
+ if(app.status!=='进行中')return false;
+ const failure=applicationFailure(app);if(!failure)return false;
+ app.status='未录用';app.reason=failure.reason;app.endedAt=failure.at||now;
+ stopFutureRounds(app,now);
+ app.history=[{at:now,actor,action:`流程终止：${failure.reason}`},...(app.history||[])];return true;
+}
+
+export function stopFutureRounds(app,now=new Date().toISOString()){
+ for(const r of app.rounds)if(r.feedback.status!=='submitted'&&(!r.time||new Date(r.time)>new Date(now)))r.cancelled=true;
 }

@@ -45,12 +45,13 @@ try{
  Object.assign(unacceptedApp.rounds[0],{time:'2026-10-20T10:00',location:'https://meeting.example.com/integration'});
  await api('/state',{method:'POST',cookie:hr,body:unaccepted,status:400});
  await api(screeningPath,{method:'PATCH',cookie:interviewer,body:{revision:pendingView.revision,decision:'declined',reason:'联调退回'}});
- assert.equal((await get()).applications.find(a=>a.id===ids.app).status,'进行中');
+ assert.equal((await get()).applications.find(a=>a.id===ids.app).status,'未录用');
  await api('/resumes/'+fileId+'/url',{cookie:interviewer,status:404});
- let resend=await get();resend.applications.find(a=>a.id===ids.app).screening={status:'pending',interviewer:`联调interviewer_${tag}`};await api('/state',{method:'POST',cookie:hr,body:resend});
+ let resend=await get();resend.applications.find(a=>a.id===ids.app).screening={status:'pending',interviewer:`联调interviewer_${tag}`};await api('/state',{method:'POST',cookie:hr,body:resend,status:400});
+ ids.closedApp=ids.app;ids.app=randomUUID();application.id=ids.app;application.rounds=roundsFromTemplate(template);const recall=await get();recall.applications.push(application);await api('/state',{method:'POST',cookie:hr,body:recall});const recalledScreeningPath=`/applications/${ids.app}/screening`;
  const pendingAgain=(await api('/state',{cookie:interviewer})).value.data;
- await api(screeningPath,{method:'PATCH',cookie:interviewer,body:{revision:pendingAgain.revision,decision:'accepted'}});
- await api(screeningPath,{method:'PATCH',cookie:interviewer,body:{revision:pendingAgain.revision,decision:'accepted'},status:409});
+ await api(recalledScreeningPath,{method:'PATCH',cookie:interviewer,body:{revision:pendingAgain.revision,decision:'accepted'}});
+ await api(recalledScreeningPath,{method:'PATCH',cookie:interviewer,body:{revision:pendingAgain.revision,decision:'accepted'},status:409});
  let accepted=await get();Object.assign(accepted.applications.find(a=>a.id===ids.app).rounds[0],{time:'2026-10-20T10:00',location:'https://meeting.example.com/integration',focus:'仅用于接口验证'});
  await api('/state',{method:'POST',cookie:hr,body:accepted});
  const stored=await readState(pool);assert.equal(stored.state.applications.find(a=>a.id===ids.app).resume.id,fileId);
@@ -107,14 +108,14 @@ try{
  hrState=await get();let a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'进行中');assert.equal(a.rounds[0].feedback.summary,'联调正式面评');
  assert.equal(a.rounds[0].feedback.transcript.id,transcript.id);assert.equal((await fetch(origin+'/api/transcripts/'+transcript.id,{headers:{Cookie:hr},redirect:'manual'})).status,302);
  a.rounds[0].feedback={...a.rounds[0].feedback,status:'returned',returnReason:'联调退回'};await api('/state',{method:'POST',cookie:hr,body:hrState});
- hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);a.status='候选人退出';a.reason='联调结束';await api('/state',{method:'POST',cookie:hr,body:hrState});
+ hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);const beforeFailure=(await api('/state',{cookie:interviewer})).value.data;await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:beforeFailure.revision,completed:true,feedback:{summary:'本轮不通过',conclusion:'建议不通过'}}});hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'未录用');assert.match(a.reason,/初试不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(hrState.applications.find(a=>a.id===ids.closedApp).status,'未录用');
  const newPassword=randomBytes(24).toString('hex');await api('/password',{method:'POST',cookie:interviewer,body:{currentPassword:password,password:newPassword}});await api('/state',{cookie:interviewer,status:401});assert.equal((await tokenRequest(mcpToken)).status,401);const renewed=(await api('/login',{method:'POST',body:{username:`smoke_interviewer_${tag}`,password:newPassword}})).cookie;await api('/logout',{method:'POST',cookie:renewed});await api('/state',{cookie:renewed,status:401});
- passed=true;console.log('PASS: personal read-only MCP, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/resend/accept, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, HR/interviewer access, concurrency conflict, feedback draft/submit/return and final outcome.');
+ passed=true;console.log('PASS: personal read-only MCP, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/terminate/recall/accept and failed-feedback termination, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, HR/interviewer access, concurrency conflict, feedback draft/submit/return and final outcome.');
 }finally{
  // Remove only records and objects created by this isolated smoke run.
  const [files]=await pool.execute('SELECT id,object_key FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);
  for(const file of files)await s3.send(new DeleteObjectCommand({Bucket:bucket,Key:file.object_key}));
- const conn=await pool.getConnection();try{await conn.beginTransaction();const {state}=await readState(conn,true);state.candidates=state.candidates.filter(c=>c.id!==ids.candidate);state.applications=state.applications.filter(a=>a.id!==ids.app);state.templates=state.templates.filter(t=>t.id!==ids.template);await conn.execute('UPDATE recruitment_state SET payload=?,revision=revision+1 WHERE id=1',[JSON.stringify(state)]);await conn.execute('DELETE FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);for(const key of ['hr','interviewer','other']){await conn.execute('DELETE FROM recruitment_audit WHERE actor_id=?',[ids[key]]);await conn.execute('DELETE FROM recruitment_users WHERE id=?',[ids[key]]);}await conn.commit();}catch(error){await conn.rollback();throw error;}finally{conn.release();await pool.end();s3.destroy();}
+ const conn=await pool.getConnection();try{await conn.beginTransaction();const {state}=await readState(conn,true);state.candidates=state.candidates.filter(c=>c.id!==ids.candidate);state.applications=state.applications.filter(a=>a.id!==ids.app&&a.id!==ids.closedApp);state.templates=state.templates.filter(t=>t.id!==ids.template);await conn.execute('UPDATE recruitment_state SET payload=?,revision=revision+1 WHERE id=1',[JSON.stringify(state)]);await conn.execute('DELETE FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);for(const key of ['hr','interviewer','other']){await conn.execute('DELETE FROM recruitment_audit WHERE actor_id=?',[ids[key]]);await conn.execute('DELETE FROM recruitment_users WHERE id=?',[ids[key]]);}await conn.commit();}catch(error){await conn.rollback();throw error;}finally{conn.release();await pool.end();s3.destroy();}
  console.log('Cleanup complete: transient integration records, accounts and resume objects removed.');
 }
 if(!passed)process.exitCode=1;

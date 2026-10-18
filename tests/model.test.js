@@ -41,21 +41,7 @@ test('简历库阶段按轮次和面评计算，不把已结束流程或欠交�
  app.rounds[0].cancelled=true;assert.match(applicationStage(app,now).detail,/待重新安排/);
  app.rounds[0].feedback.status='submitted';assert.equal(applicationStage(app,now).name,'复试');assert.match(applicationStage(app,now).detail,/第 2 \/ 3 轮/);
  for(const r of app.rounds)r.feedback.status='submitted';assert.equal(applicationStage(app,now).name,'待 HR 决策');
- app.status='未录用';assert.equal(applicationStage(app,now).name,'未录用');assert.equal(applicationStage(undefined).name,'未创建应聘');
-});
-
-test('应聘工作列表给出当前可执行动作；旧面评未交不阻止安排下一轮',async()=>{
- const {applicationAction,round}=await import('../src/model.js');const now=Date.parse('2026-10-18T10:00:00Z');
- const app={status:'进行中',rounds:[round('初试'),round('复试')]};
- assert.deepEqual(applicationAction(app,now),{type:'screening',label:'推送简历'});
- app.screening={status:'pending',interviewer:'甲'};assert.equal(applicationAction(app,now).type,'view');
- app.screening.status='declined';assert.equal(applicationAction(app,now).label,'重新推送');
- app.screening.status='accepted';assert.deepEqual(applicationAction(app,now),{type:'schedule',label:'安排首轮',roundId:app.rounds[0].id});
- app.rounds[0].time='2026-10-20T10:00:00Z';assert.equal(applicationAction(app,now).label,'查看安排');
- app.rounds[0].time='2026-10-17T10:00:00Z';assert.deepEqual(applicationAction(app,now),{type:'schedule',label:'安排复试',roundId:app.rounds[1].id});
- app.rounds[1].time='2026-10-17T12:00:00Z';assert.equal(applicationAction(app,now).label,'查看待交面评');
- for(const r of app.rounds)r.feedback.status='submitted';assert.deepEqual(applicationAction(app,now),{type:'end',label:'记录应聘结果'});
- app.status='未录用';assert.deepEqual(applicationAction(app,now),{type:'view',label:'查看结果'});
+ app.status='未录用';assert.equal(applicationStage(app,now).name,'流程终止');assert.equal(applicationStage(undefined).name,'未创建应聘');
 });
 
 test('进度颜色按实际待办区分，提交面评和录用不混为正在面试',async()=>{
@@ -82,4 +68,24 @@ test('分段进度按实际面评完成，不因时间已过、安排后续轮�
  app.rounds[0].time='2026-10-17T10:00:00Z';app.rounds[1].time='2026-10-20T10:00:00Z';steps=applicationProgress(app,now);assert.equal(steps[1].done,false);assert.equal(steps[1].tone,'feedback');assert.equal(steps[2].active,true);
  app.rounds[1].feedback.status='submitted';steps=applicationProgress(app,now);assert.equal(steps[1].done,false);assert.equal(steps[2].done,true);
  app.status='未录用';steps=applicationProgress(app,now);assert.equal(steps[1].done,false);assert.equal(steps.at(-1).done,true);assert.equal(steps.at(-1).tone,'danger');assert.ok(steps.every(s=>!s.active));
+});
+
+test('简历不通过立即终止，允许从简历库捞起新应聘，但不能重开原流程',async()=>{
+ const {terminateFailedApplication,canCreateApplication,applicationStatus}=await import('../src/model.js');
+ const app=seed().applications[0];app.screening={status:'declined',reason:'经历不匹配',reviewedAt:'2026-10-18T10:00:00Z'};
+ assert.equal(terminateFailedApplication(app,'面试官','2026-10-18T10:00:00Z'),true);
+ assert.equal(app.status,'未录用');assert.equal(applicationStatus(app),'流程终止');assert.match(app.reason,/简历筛选不通过/);
+ assert.equal(canCreateApplication([app],app.candidateId),true);assert.equal(app.rounds[1].cancelled,true);
+ assert.throws(()=>endApplication(app,'公司决定录用','重开'));assert.equal(terminateFailedApplication(app),false);
+});
+test('草稿/待反馈不终止，任意轮正式不通过终止；保留其他已提交面评和过去欠评',async()=>{
+ const {terminateFailedApplication,applicationFailure,roundTone}=await import('../src/model.js');
+ const app=seed().applications[0],now='2026-10-18T10:00:00Z';
+ app.rounds[1].feedback={status:'draft',conclusion:'建议不通过',summary:'仅草稿'};assert.equal(terminateFailedApplication(app),false);
+ app.rounds[0].feedback.status='submitted';app.rounds[0].feedback.conclusion='建议通过';
+ app.rounds[1].feedback.status='submitted';app.rounds[1].feedback.submittedAt=now;
+ assert.equal(terminateFailedApplication(app,'面试官',now),true);assert.match(app.reason,/复试不通过/);assert.equal(roundTone(app.rounds[1]),'danger');
+ assert.equal(app.rounds[0].feedback.conclusion,'建议通过');assert.equal(app.rounds[2].cancelled,true);
+ app.rounds[1].feedback.status='returned';assert.equal(terminateFailedApplication(app),false);assert.equal(app.status,'未录用');
+ const overdue=seed().applications[0];overdue.rounds[1].feedback={status:'submitted',conclusion:'建议不通过',summary:'不匹配'};terminateFailedApplication(overdue,'面试官',now);assert.equal(overdue.rounds[0].cancelled,false);
 });

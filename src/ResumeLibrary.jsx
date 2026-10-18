@@ -6,7 +6,7 @@ import {applicationStage,candidateResumes,canCreateApplication,educationOptions,
 export function ResumeLibrary({data,query,open,archive}){
  const candidates=data.candidates.filter(c=>`${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(query.toLowerCase()));
  return <section className="resume-library">
-  <div className="title-row"><div><h1>简历库</h1><p className="muted">按候选人查找资料、简历版本和历次应聘记录</p></div><button onClick={()=>open('import')}>录入新候选人并创建应聘</button></div>
+  <div className="title-row"><div><h1>简历库</h1><p className="muted">按候选人查找资料、简历版本和历次应聘记录</p></div><button className="primary" onClick={()=>open('import')}>录入新候选人并创建应聘</button></div>
   <PaginatedList items={candidates} resetKey={query} label="简历库">{rows=><div className="table-wrap"><table><thead><tr><th>候选人资料</th><th>联系方式</th><th>应聘概况</th><th>简历附件</th><th>档案操作</th></tr></thead><tbody>
    {rows.map(c=>{
     const apps=data.applications.filter(a=>a.candidateId===c.id),active=apps.find(a=>a.status==='进行中'),latest=apps[0],stage=applicationStage(active||latest),files=candidateResumes(c,data.applications);

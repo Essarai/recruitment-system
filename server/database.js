@@ -10,6 +10,8 @@ export async function initializeDatabase(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS recruitment_files(id CHAR(36) PRIMARY KEY,object_key VARCHAR(200) NOT NULL UNIQUE,name VARCHAR(240) NOT NULL,mime VARCHAR(120) NOT NULL,size INT UNSIGNED NOT NULL,owner_id CHAR(36) NOT NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
  await pool.query(`CREATE TABLE IF NOT EXISTS recruitment_audit(id BIGINT AUTO_INCREMENT PRIMARY KEY,actor_id CHAR(36) NOT NULL,action VARCHAR(200) NOT NULL,target_id VARCHAR(100) NOT NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
  await pool.query(`CREATE TABLE IF NOT EXISTS recruitment_mcp_tokens(user_id CHAR(36) PRIMARY KEY,token_hash CHAR(64) NOT NULL UNIQUE,token_hint CHAR(8) NOT NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,expires_at DATETIME NOT NULL,FOREIGN KEY(user_id) REFERENCES recruitment_users(id) ON DELETE CASCADE)`);
+ const [scopeColumns]=await pool.query("SHOW COLUMNS FROM recruitment_mcp_tokens LIKE 'can_write'");
+ if(!scopeColumns.length)try{await pool.query('ALTER TABLE recruitment_mcp_tokens ADD COLUMN can_write BOOLEAN NOT NULL DEFAULT FALSE');}catch(error){if(error.code!=='ER_DUP_FIELDNAME')throw error;}
  await pool.query(`CREATE TABLE IF NOT EXISTS recruitment_transcripts(file_id CHAR(36) PRIMARY KEY,application_id VARCHAR(80) NOT NULL,round_id VARCHAR(80) NOT NULL,FOREIGN KEY(file_id) REFERENCES recruitment_files(id) ON DELETE CASCADE)`);
  await pool.execute('INSERT IGNORE INTO recruitment_state(id,revision,payload) VALUES(1,0,?)',[JSON.stringify(emptyState())]);
  const connection=await pool.getConnection();

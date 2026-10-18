@@ -48,3 +48,21 @@ test('真实 MCP 协议仅注册三个只读工具，分页及详情不泄露他
   assert.equal((await client.callTool({name:'get_my_interview',arguments:{applicationId:'a7'}})).isError,true);
  }finally{await client.close();await server.close();}
 });
+
+test('写入工具要求专用权限、本轮有效安排及逐次确认；仅保存草稿，拒绝他人和正式面评',async()=>{
+ const state=fixture();state.revision=12;let writes=0,uploads=0;
+ const server=createInterviewMcp({user:{...user,canWrite:true},loadState:async()=>state,fileAccess:async()=>({}),saveDraft:async(appId,roundId,body)=>{writes++;assert.equal(body.draft,true);assert.equal(body.revision,12);assert.equal(body.feedback.summary,'已确认内容');return {revision:13};},uploadTranscript:async(appId,roundId,name,buffer)=>{uploads++;assert.equal(buffer.toString(),'完整对话');return {id:'uploaded',name};}});
+ const client=new Client({name:'write-test',version:'1'}),[ct,st]=InMemoryTransport.createLinkedPair();
+ try{
+  await server.connect(st);await client.connect(ct);assert.equal((await client.listTools()).tools.length,5);
+  const base={applicationId:'a0',roundId:state.applications[0].rounds[0].id,revision:12,summary:'已确认内容',conclusion:'建议不通过'};
+  assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:false}})).isError,true);assert.equal(writes,0);
+  const saved=await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}});assert.equal(saved.isError,undefined);assert.equal(writes,1);assert.equal(state.applications[0].status,'进行中');
+  assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,roundId:state.applications[0].rounds[1].id,confirmed:true}})).isError,true);
+  const file={applicationId:'a0',roundId:base.roundId,name:'dialogue.txt',contentBase64:Buffer.from('完整对话').toString('base64'),confirmed:true};
+  assert.equal((await client.callTool({name:'upload_my_transcript',arguments:{...file,confirmed:false}})).isError,true);
+  assert.equal((await client.callTool({name:'upload_my_transcript',arguments:{...file,contentBase64:'@@@@'}})).isError,true);
+  assert.equal((await client.callTool({name:'upload_my_transcript',arguments:file})).isError,undefined);assert.equal(uploads,1);
+  state.applications[0].rounds[0].feedback.status='submitted';assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}})).isError,true);assert.equal(writes,1);
+ }finally{await client.close();await server.close();}
+});

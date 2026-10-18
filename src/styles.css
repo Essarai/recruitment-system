@@ -117,3 +117,5 @@ select:focus-visible{outline:3px solid #e8f0fe;border-color:#1a73e8}
 .resume-library td:last-child{white-space:nowrap}.library-actions button{flex-shrink:0}
 
 .resume-library th:nth-child(3){width:auto}
+
+.mcp-prompt{background:#f8fafd;border:1px solid #e8eaed;border-radius:8px;padding:20px;margin:24px 0}.mcp-prompt details{margin-top:16px}.mcp-prompt summary{cursor:pointer;color:#1967d2}.mcp-prompt textarea{width:100%;margin-top:12px;font-size:var(--text-body);line-height:1.6}.mcp-prompt h3{margin-bottom:8px}

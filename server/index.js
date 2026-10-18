@@ -1,18 +1,19 @@
+import {uploadInterviewTranscript} from './transcript-upload.js';
+import {saveInterviewFeedback} from './feedback.js';
 import {mountInterviewMcp,mountMcpTokenManagement} from './mcp.js';
-import {validateTranscript,canUploadTranscript,canReadTranscript,transcriptReference} from './transcripts.js';
+import {canReadTranscript} from './transcripts.js';
 import {parseResume} from './resume-parser.js';
 import {canAccessResume,decideScreening} from './screening.js';
 import express from 'express';
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {DeleteObjectCommand} from '@aws-sdk/client-s3';
 import {pool,s3,bucket,initializeStorage} from './infrastructure.js';
 import {initializeDatabase,readState,users,visibleState} from './database.js';
 import {hashPassword,verifyPassword,tokenHash,sessionToken,getSessionCookie,setSessionCookie} from './auth.js';
 import {validateHRState,text} from './validation.js';
 import {MAX_FILE,validateResume,signedResumeAccess,storePrivateFile} from './files.js';
-import {submitFeedback,terminateFailedApplication} from '../src/model.js';
+import {terminateFailedApplication} from '../src/model.js';
 const app=express();app.disable('x-powered-by');if(process.env.NODE_ENV==='production')app.set('trust proxy',1);
 app.use((req,res,next)=>{
  res.set('X-Content-Type-Options','nosniff');if(req.path.startsWith('/api'))res.set('Cache-Control','no-store');
@@ -78,20 +79,7 @@ app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}
 });
 app.patch('/api/applications/:appId/rounds/:roundId/feedback',express.json({limit:'32kb'}),async(req,res)=>{
- const conn=await pool.getConnection();try{
-  await conn.beginTransaction();const {state,revision}=await readState(conn,true);
-  if(req.body.revision!==revision){await conn.rollback();return res.status(409).json({error:'数据已更新，请刷新后重新填写'});}
-  const a=state.applications.find(a=>a.id===req.params.appId),r=a?.rounds.find(r=>r.id===req.params.roundId);
-  if(!r||r.interviewer!==req.user.name||req.user.role!=='interviewer'||!r.time||r.cancelled){await conn.rollback();return res.status(403).json({error:'无权修改此面评'});}
-  if(r.feedback.status==='submitted')throw Error('面评已提交，请先由 HR 退回');
-  const input=req.body.feedback||{},f={summary:text(input.summary,'综合评价',10000),strengths:text(input.strengths,'优势',5000),concerns:text(input.concerns,'待验证事项',5000),conclusion:text(input.conclusion,'建议结论',20)};
-  const transcript=await transcriptReference(conn,input.transcript,r.feedback.transcript,a.id,r.id,req.user);if(transcript)f.transcript=transcript;
-  if(req.body.draft)r.feedback={...f,status:r.feedback.status==='returned'?'returned':'draft',author:req.user.name,returnReason:r.feedback.returnReason||''};
-  else r.feedback=submitFeedback(a,r,req.user.name,f,req.body.completed===true);
-  if(!req.body.draft)terminateFailedApplication(a,req.user.name);
-  a.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:req.body.draft?'保存面评草稿':'提交面评'});
-  await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,req.body.draft?'保存面评草稿':'提交面评',r.id]);await conn.commit();res.json(visibleState(state,req.user,await users(pool),revision+1));
- }catch(error){await conn.rollback();throw error;}finally{conn.release();}
+ res.json(await saveInterviewFeedback(pool,req.user,req.params.appId,req.params.roundId,req.body));
 });
 app.post('/api/resumes/parse',hr,express.raw({type:'application/octet-stream',limit:MAX_FILE}),async(req,res)=>{
  const name=text(req.query.name,'文件名',240,true);res.json(await parseResume(name,req.body));
@@ -100,13 +88,7 @@ app.post('/api/resumes',hr,express.raw({type:'application/octet-stream',limit:MA
  const name=text(req.query.name,'文件名',240,true);res.status(201).json(await storePrivateFile(pool,s3,bucket,req.user.id,name,req.body,validateResume(name,req.body),'resumes'));
 });
 app.post('/api/applications/:appId/rounds/:roundId/transcript',express.raw({type:'application/octet-stream',limit:MAX_FILE}),async(req,res)=>{
- const {state}=await readState(pool),a=state.applications.find(a=>a.id===req.params.appId),r=a?.rounds.find(r=>r.id===req.params.roundId);
- if(!canUploadTranscript(a,r,req.user))return res.status(403).json({error:'仅本轮面试官可以在未锁定的面评中上传对话'});
- const name=text(req.query.name,'文件名',240,true),format=validateTranscript(name,req.body);
- const file=await storePrivateFile(pool,s3,bucket,req.user.id,name,req.body,format,'transcripts');
- try{await pool.execute('INSERT INTO recruitment_transcripts(file_id,application_id,round_id) VALUES(?,?,?)',[file.id,a.id,r.id]);}
- catch(error){const [[stored]]=await pool.execute('SELECT object_key FROM recruitment_files WHERE id=?',[file.id]);try{await s3.send(new DeleteObjectCommand({Bucket:bucket,Key:stored.object_key}));await pool.execute('DELETE FROM recruitment_files WHERE id=?',[file.id]);}catch{console.error('Failed to clean an unlinked transcript',file.id);}throw error;}
- res.status(201).json(file);
+ res.status(201).json(await uploadInterviewTranscript({pool,s3,bucket},req.user,req.params.appId,req.params.roundId,req.query.name,req.body));
 });
 app.get('/api/transcripts/:id',async(req,res)=>{
  const {state}=await readState(pool);if(!canReadTranscript(state,req.params.id,req.user))return res.status(404).json({error:'对话附件不存在或无权访问'});
@@ -127,7 +109,7 @@ const dist=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist/cl
 app.use((error,req,res,next)=>{
  if(res.headersSent)return next(error);
  if(error.type==='entity.too.large')return res.status(413).json({error:'请求内容过大，简历不超过 20 MB'});
- const infrastructure=error.code||error.$metadata;const status=infrastructure?503:400;
+ const infrastructure=error.code||error.$metadata;const status=infrastructure?503:([403,409].includes(error.status)?error.status:400);
  console.error('Request failed',{path:req.path,type:error.name,code:error.code||error.$metadata?.httpStatusCode});res.status(status).json({error:infrastructure?'数据库或文件存储暂时不可用，请稍后重试':error.message||'请求失败'});
 });
 await initializeDatabase(pool);await initializeStorage();

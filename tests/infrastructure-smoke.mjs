@@ -70,20 +70,27 @@ try{
  await api(transcriptPath,{method:'POST',cookie:other,body:conversation,headers:{'Content-Type':'application/octet-stream'},status:403});
  const transcript=(await api(transcriptPath,{method:'POST',cookie:interviewer,body:conversation,headers:{'Content-Type':'application/octet-stream'},status:201})).value;
  await api('/mcp-token',{cookie:hr,status:403});
- const mcpToken=(await api('/mcp-token',{method:'POST',cookie:interviewer})).value.token;
+ const mcpToken=(await api('/mcp-token',{method:'POST',cookie:interviewer,body:{canWrite:true}})).value.token;
  const otherToken=(await api('/mcp-token',{method:'POST',cookie:other})).value.token;
  const {Client}=await import('@modelcontextprotocol/sdk/client/index.js');const {StreamableHTTPClientTransport}=await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
  const connectMcp=async token=>{const client=new Client({name:'smoke-test',version:'1.0.0'});await client.connect(new StreamableHTTPClientTransport(new URL(origin+'/mcp'),{requestInit:{headers:{Authorization:'Bearer '+token}}}));return client;};
  assert.equal((await fetch(origin+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
  const mcp=await connectMcp(mcpToken),otherMcp=await connectMcp(otherToken);
  try{
-  assert.equal((await mcp.listTools()).tools.length,3);
+  assert.equal((await mcp.listTools()).tools.length,5);assert.equal((await otherMcp.listTools()).tools.length,3);
   const read=async(client,name,args)=>client.callTool({name,arguments:args});
   assert.equal(JSON.parse((await read(mcp,'list_my_interviews',{})).content[0].text).total,1);
   assert.equal(JSON.parse((await read(otherMcp,'list_my_interviews',{})).content[0].text).total,0);
   assert.equal((await read(otherMcp,'get_my_interview',{applicationId:ids.app})).isError,true);
   assert.equal((await read(otherMcp,'get_interview_file',{applicationId:ids.app,kind:'resume'})).isError,true);
  }finally{await mcp.close();await otherMcp.close();}
+ const writeMcp=await connectMcp(mcpToken);
+ try{
+  const uploaded=await writeMcp.callTool({name:'upload_my_transcript',arguments:{applicationId:ids.app,roundId,name:'conversation.txt',contentBase64:conversation.toString('base64'),confirmed:true}});assert.notEqual(uploaded.isError,true);Object.assign(transcript,JSON.parse(uploaded.content[0].text));
+  const denied=await writeMcp.callTool({name:'save_my_feedback_draft',arguments:{applicationId:ids.app,roundId,revision:view.revision,summary:'MCP 联调草稿',conclusion:'建议不通过',confirmed:false}});assert.equal(denied.isError,true);
+  const saved=await writeMcp.callTool({name:'save_my_feedback_draft',arguments:{applicationId:ids.app,roundId,revision:view.revision,summary:'MCP 联调草稿',conclusion:'建议不通过',transcriptId:transcript.id,confirmed:true}});assert.notEqual(saved.isError,true);view.revision=JSON.parse(saved.content[0].text).revision;
+  const hrAfter=await get();assert.equal(hrAfter.applications.find(a=>a.id===ids.app).status,'进行中');assert.equal(hrAfter.applications.find(a=>a.id===ids.app).rounds[0].feedback.summary,undefined);
+ }finally{await writeMcp.close();}
  await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:view.revision,draft:true,feedback:{summary:'联调草稿',transcript:{id:'not-this-round'}}},status:400});
 
  await api(feedbackPath,{method:'PATCH',cookie:other,body:{revision:view.revision},status:403});
@@ -110,7 +117,7 @@ try{
  a.rounds[0].feedback={...a.rounds[0].feedback,status:'returned',returnReason:'联调退回'};await api('/state',{method:'POST',cookie:hr,body:hrState});
  hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);const beforeFailure=(await api('/state',{cookie:interviewer})).value.data;await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:beforeFailure.revision,completed:true,feedback:{summary:'本轮不通过',conclusion:'建议不通过'}}});hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'未录用');assert.match(a.reason,/初试不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(hrState.applications.find(a=>a.id===ids.closedApp).status,'未录用');
  const newPassword=randomBytes(24).toString('hex');await api('/password',{method:'POST',cookie:interviewer,body:{currentPassword:password,password:newPassword}});await api('/state',{cookie:interviewer,status:401});assert.equal((await tokenRequest(mcpToken)).status,401);const renewed=(await api('/login',{method:'POST',body:{username:`smoke_interviewer_${tag}`,password:newPassword}})).cookie;await api('/logout',{method:'POST',cookie:renewed});await api('/state',{cookie:renewed,status:401});
- passed=true;console.log('PASS: personal read-only MCP, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/terminate/recall/accept and failed-feedback termination, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, HR/interviewer access, concurrency conflict, feedback draft/submit/return and final outcome.');
+ passed=true;console.log('PASS: scoped read/write MCP, confirmed draft saves and transcript uploads, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/terminate/recall/accept and failed-feedback termination, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, HR/interviewer access, concurrency conflict, feedback draft/submit/return and final outcome.');
 }finally{
  // Remove only records and objects created by this isolated smoke run.
  const [files]=await pool.execute('SELECT id,object_key FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);

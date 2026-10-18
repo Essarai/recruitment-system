@@ -1,3 +1,4 @@
+import {isRecruiter} from '../src/permissions.js';
 import {validateResume,MAX_FILE} from './files.js';
 
 export function validateTranscript(name,buffer){
@@ -14,7 +15,7 @@ export function canUploadTranscript(app,round,user){
 export function canReadTranscript(state,fileId,user){
  return state.applications.some(app=>app.rounds.some(round=>{
   const published=[...(round.feedback.status==='submitted'?[round.feedback]:[]),...(round.feedbackVersions||[])];
-  if(user.role==='HR')return published.some(f=>f.transcript?.id===fileId);
+  if(isRecruiter(user))return published.some(f=>f.transcript?.id===fileId);
   return user.role==='interviewer'&&round.interviewer===user.name&&!!round.time&&[round.feedback,...published].some(f=>f.transcript?.id===fileId);
  }));
 }

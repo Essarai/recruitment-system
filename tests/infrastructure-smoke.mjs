@@ -9,19 +9,24 @@ import {roundsFromTemplate} from '../src/model.js';
 import {textPDF} from './text-pdf-fixture.js';
 const origin=process.env.SMOKE_ORIGIN||'http://127.0.0.1:3001';
 const tag=randomBytes(5).toString('hex'),password=randomBytes(24).toString('hex');
-const ids={hr:randomUUID(),interviewer:randomUUID(),other:randomUUID(),candidate:randomUUID(),app:randomUUID(),template:randomUUID()};
+const ids={admin:randomUUID(),hr:randomUUID(),interviewer:randomUUID(),other:randomUUID(),candidate:randomUUID(),app:randomUUID(),template:randomUUID()};
 let fileId;let passed=false;
 async function api(path,{method='GET',cookie,body,status=200,headers={}}={}){const response=await fetch(origin+'/api'+path,{method,headers:{...(cookie?{Cookie:cookie}:{}),...(body&&!Buffer.isBuffer(body)?{'Content-Type':'application/json'}:{}),...headers},body:body?(Buffer.isBuffer(body)?body:JSON.stringify(body)):undefined});const value=await response.json();assert.equal(response.status,status,`Unexpected HTTP status for ${method} ${path}: ${value.error||response.status}`);return {value,cookie:response.headers.get('set-cookie')?.split(';')[0]};}
 try{
  const hash=await hashPassword(password);
- for(const [key,role] of [['hr','HR']])await pool.execute('INSERT INTO recruitment_users(id,username,name,role,password_hash) VALUES(?,?,?,?,?)',[ids[key],`smoke_${key}_${tag}`,`联调${key}_${tag}`,role,hash]);
+ for(const [key,role] of [['admin','admin'],['hr','HR']])await pool.execute('INSERT INTO recruitment_users(id,username,name,role,password_hash) VALUES(?,?,?,?,?)',[ids[key],`smoke_${key}_${tag}`,`联调${key}_${tag}`,role,hash]);
  await api('/state',{status:401});
+ const admin=(await api('/login',{method:'POST',body:{username:`smoke_admin_${tag}`,password}})).cookie;
  const hr=(await api('/login',{method:'POST',body:{username:`smoke_hr_${tag}`,password}})).cookie;
- for(const key of ['interviewer','other']){await api('/users',{method:'POST',cookie:hr,body:{username:`smoke_${key}_${tag}`,name:`联调${key}_${tag}`,role:'interviewer',password}});const [[created]]=await pool.execute('SELECT id FROM recruitment_users WHERE username=?',[`smoke_${key}_${tag}`]);ids[key]=created.id;}
+ for(const key of ['interviewer','other']){await api('/users',{method:'POST',cookie:admin,body:{username:`smoke_${key}_${tag}`,name:`联调${key}_${tag}`,role:'interviewer',password}});const [[created]]=await pool.execute('SELECT id FROM recruitment_users WHERE username=?',[`smoke_${key}_${tag}`]);ids[key]=created.id;}
  const interviewer=(await api('/login',{method:'POST',body:{username:`smoke_interviewer_${tag}`,password}})).cookie;
  const other=(await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password}})).cookie;
  const get=async()=> (await api('/state',{cookie:hr})).value.data;
  const initial=await get();
+ assert.ok(initial.users.every(u=>u.role==='interviewer'&&u.username===undefined));
+ await api('/users',{method:'POST',cookie:hr,body:{username:'forbidden',name:'forbidden',role:'admin',password},status:403});
+ await api('/users/'+ids.other+'/status',{method:'PATCH',cookie:hr,body:{frozen:true},status:403});
+ await api('/users/'+ids.admin+'/status',{method:'PATCH',cookie:admin,body:{frozen:true},status:400});
  const sample=textPDF(['Name: Jane Chen','Phone: 13800138000','Email: jane@example.com']);
  await api('/resumes/parse?name=sample.pdf',{method:'POST',cookie:interviewer,body:sample,headers:{'Content-Type':'application/octet-stream'},status:403});
  const parsed=(await api('/resumes/parse?name=sample.pdf',{method:'POST',cookie:hr,body:sample,headers:{'Content-Type':'application/octet-stream'}})).value;
@@ -120,13 +125,16 @@ try{
  assert.equal(a.rounds[0].feedback.transcript.id,transcript.id);assert.equal((await fetch(origin+'/api/transcripts/'+transcript.id,{headers:{Cookie:hr},redirect:'manual'})).status,302);
  a.rounds[0].feedback={...a.rounds[0].feedback,status:'returned',returnReason:'联调退回'};await api('/state',{method:'POST',cookie:hr,body:hrState});
  hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);const beforeFailure=(await api('/state',{cookie:interviewer})).value.data;await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:beforeFailure.revision,completed:true,feedback:{summary:'本轮不通过',conclusion:'建议不通过'}}});hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'未录用');assert.match(a.reason,/初试不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(hrState.applications.find(a=>a.id===ids.closedApp).status,'未录用');
+ const freezeToken=(await api('/mcp-token',{method:'POST',cookie:other})).value.token;
+ await api('/users/'+ids.other+'/status',{method:'PATCH',cookie:admin,body:{frozen:true}});await api('/state',{cookie:other,status:401});await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password},status:403});assert.equal((await tokenRequest(freezeToken)).status,401);
+ await api('/users/'+ids.other+'/status',{method:'PATCH',cookie:admin,body:{frozen:false}});await api('/state',{cookie:other,status:401});assert.equal((await tokenRequest(freezeToken)).status,401);await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password}});
  const newPassword=randomBytes(24).toString('hex');await api('/password',{method:'POST',cookie:interviewer,body:{currentPassword:password,password:newPassword}});await api('/state',{cookie:interviewer,status:401});assert.equal((await tokenRequest(mcpToken)).status,401);const renewed=(await api('/login',{method:'POST',body:{username:`smoke_interviewer_${tag}`,password:newPassword}})).cookie;await api('/logout',{method:'POST',cookie:renewed});await api('/state',{cookie:renewed,status:401});
- passed=true;console.log('PASS: scoped read/write MCP, confirmed draft saves and transcript uploads, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/terminate/recall/accept and failed-feedback termination, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, HR/interviewer access, concurrency conflict, feedback draft/submit/return and final outcome.');
+ passed=true;console.log('PASS: scoped read/write MCP, confirmed draft saves and transcript uploads, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/terminate/recall/accept and failed-feedback termination, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, administrator/HR/interviewer separation, freezing and credential revocation, concurrency conflict, feedback draft/submit/return and final outcome.');
 }finally{
  // Remove only records and objects created by this isolated smoke run.
  const [files]=await pool.execute('SELECT id,object_key FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);
  for(const file of files)await s3.send(new DeleteObjectCommand({Bucket:bucket,Key:file.object_key}));
- const conn=await pool.getConnection();try{await conn.beginTransaction();const {state}=await readState(conn,true);state.candidates=state.candidates.filter(c=>c.id!==ids.candidate);state.applications=state.applications.filter(a=>a.id!==ids.app&&a.id!==ids.closedApp);state.templates=state.templates.filter(t=>t.id!==ids.template);await conn.execute('UPDATE recruitment_state SET payload=?,revision=revision+1 WHERE id=1',[JSON.stringify(state)]);await conn.execute('DELETE FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);for(const key of ['hr','interviewer','other']){await conn.execute('DELETE FROM recruitment_audit WHERE actor_id=?',[ids[key]]);await conn.execute('DELETE FROM recruitment_users WHERE id=?',[ids[key]]);}await conn.commit();}catch(error){await conn.rollback();throw error;}finally{conn.release();await pool.end();s3.destroy();}
+ const conn=await pool.getConnection();try{await conn.beginTransaction();const {state}=await readState(conn,true);state.candidates=state.candidates.filter(c=>c.id!==ids.candidate);state.applications=state.applications.filter(a=>a.id!==ids.app&&a.id!==ids.closedApp);state.templates=state.templates.filter(t=>t.id!==ids.template);await conn.execute('UPDATE recruitment_state SET payload=?,revision=revision+1 WHERE id=1',[JSON.stringify(state)]);await conn.execute('DELETE FROM recruitment_files WHERE owner_id IN (?,?,?)',[ids.hr,ids.interviewer,ids.other]);for(const key of ['admin','hr','interviewer','other']){await conn.execute('DELETE FROM recruitment_audit WHERE actor_id=?',[ids[key]]);await conn.execute('DELETE FROM recruitment_users WHERE id=?',[ids[key]]);}await conn.commit();}catch(error){await conn.rollback();throw error;}finally{conn.release();await pool.end();s3.destroy();}
  console.log('Cleanup complete: transient integration records, accounts and resume objects removed.');
 }
 if(!passed)process.exitCode=1;

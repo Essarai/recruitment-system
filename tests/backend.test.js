@@ -73,3 +73,9 @@ test('流程 JD 可选且有长度校验；应聘取服务端模板快照，模�
  const optional=structuredClone(input);delete optional.templates[0].jd;assert.equal(validateHRState(emptyState(),optional,[],[file],'HR').applications[0].jd,'');
  const oversized=structuredClone(input);oversized.templates[0].jd='a'.repeat(20001);assert.throws(()=>validateHRState(emptyState(),oversized,[],[file],'HR'),/JD/);
 });
+
+test('冻结面试官的历史安排保留，但不能新增或修改其安排',()=>{
+ const previous=state(),view=visibleState(previous,{role:'HR'},[],1),names=['面试官甲','面试官乙'];
+ assert.equal(validateHRState(previous,view,names,[file],'HR',['面试官乙']).applications[0].rounds[0].interviewer,'面试官甲');
+ const changed=structuredClone(view);changed.applications[0].rounds[0].time='2026-10-22T10:00';assert.throws(()=>validateHRState(previous,changed,names,[file],'HR',['面试官乙']),/已冻结/);
+});

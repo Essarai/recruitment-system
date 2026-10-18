@@ -1,3 +1,4 @@
+import {isRecruiter} from './permissions.js';
 let currentUser=null;
 let baseline=null;
 const transcriptUploads=new WeakMap();
@@ -13,7 +14,7 @@ export const createUser=user=>request('/users',{method:'POST',body:JSON.stringif
 export const changePassword=password=>request('/password',{method:'POST',body:JSON.stringify(password)});
 export async function save(next,onProgress=()=>{}){
  let result;
- if(currentUser.role==='HR'){
+ if(isRecruiter(currentUser)){
   const payload={...next,candidates:next.candidates.map(c=>({...c,...(c.resumes?{resumes:c.resumes.map(r=>({...r}))}:{})})),applications:next.applications.map(app=>({...app}))};
   for(const candidate of payload.candidates)for(let i=0;i<(candidate.resumes||[]).length;i++){const version=candidate.resumes[i];if(version.file instanceof File){onProgress('正在上传简历…');candidate.resumes[i]=await request('/resumes?name='+encodeURIComponent(version.file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:version.file});}}
   for(const app of payload.applications){if(app.resume?.file instanceof File){const file=app.resume.file;onProgress('正在上传简历…');app.resume=await request('/resumes?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});}}
@@ -42,3 +43,5 @@ export async function decideScreening(appId,decision,reason){
 }
 
 export const parseResume=(file,signal)=>request('/resumes/parse?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file,signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
+
+export const setAccountFrozen=(id,frozen)=>request('/users/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({frozen})});

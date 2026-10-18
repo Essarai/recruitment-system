@@ -7,7 +7,7 @@ function id(value){return text(value,'记录 ID',80,true);}
 function unique(records,label){if(new Set(records.map(x=>x.id)).size!==records.length)throw Error(`${label}含重复 ID`);}
 function preserve(previous,next,label){if(previous.some(x=>!next.some(y=>y.id===x.id)))throw Error(`不能删除已有${label}`);}
 const scheduleKeys=['interviewer','time','mode','location','focus'];
-export function validateHRState(previous,input,interviewers,files,actor){
+export function validateHRState(previous,input,interviewers,files,actor,activeInterviewers=interviewers){
  const now=new Date().toISOString();
  const candidates=array(input.candidates,'候选人').map(c=>{
   const old=previous.candidates.find(x=>x.id===c.id);if(old&&equal(old,c))return structuredClone(old);
@@ -24,7 +24,11 @@ export function validateHRState(previous,input,interviewers,files,actor){
   return result;
  });
  unique(candidates,'候选人');preserve(previous.candidates,candidates,'候选人');
- const templates=array(input.templates,'流程模板',100).map(t=>({id:id(t.id),name:text(t.name,'流程名称',100,true),jd:text(t.jd,'JD',20000),nodes:templateNodes(array(t.nodes,'流程节点',50),interviewers)}));
+ const templates=array(input.templates,'流程模板',100).map(t=>{
+  const nodes=templateNodes(array(t.nodes,'流程节点',50),interviewers),old=previous.templates.find(x=>x.id===t.id);
+  if(nodes.some((n,i)=>n.interviewer&&!activeInterviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('不能将已冻结账号设为默认面试官');
+  return {id:id(t.id),name:text(t.name,'流程名称',100,true),jd:text(t.jd,'JD',20000),nodes};
+ });
  unique(templates,'模板');preserve(previous.templates,templates,'模板');
  const roundIds=new Set();const newApplicants=new Set();
  const applications=array(input.applications,'应聘记录').map(a=>{
@@ -39,7 +43,7 @@ export function validateHRState(previous,input,interviewers,files,actor){
   const file=files.find(f=>f.id===a.resume.id);if(!file)throw Error('简历附件不存在，请重新上传');
   next.resume={id:file.id,name:file.name,size:file.size,type:file.mime};
   if(old&&!equal(old.resume,next.resume))throw Error('已有应聘的简历版本不能覆盖，请创建新的应聘记录');
-  const screening=normalizeScreening(old,a,interviewers,actor);if(screening)next.screening=screening;
+  const screening=normalizeScreening(old,a,interviewers,actor);if(screening?.interviewer&&!equal(old?.screening,screening)&&!activeInterviewers.includes(screening.interviewer))throw Error('不能向已冻结的面试官推送简历');if(screening)next.screening=screening;
   next.rounds=array(a.rounds,'面试轮次',50).map((r,index)=>{
    const oldRound=old?.rounds.find(x=>x.id===r.id);
    const result={id:id(r.id),name:text(r.name,'轮次名称',100,true),interviewer:text(r.interviewer,'面试官',100),time:text(r.time,'面试时间',40),mode:text(r.mode,'面试方式',10),location:text(r.location,'会议链接或地点',2000),focus:text(r.focus,'考察重点',2000),cancelled:r.cancelled===true,feedback:oldRound?.feedback||{status:'none',summary:'',strengths:'',concerns:'',conclusion:''}};
@@ -50,6 +54,7 @@ export function validateHRState(previous,input,interviewers,files,actor){
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
    const changed=!oldRound||scheduleKeys.some(k=>oldRound[k]!==result[k])||(oldRound.cancelled&&!result.cancelled);
    if(changed){
+    if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error('不能为已冻结的面试官新增或修改安排');
     if(old?.status!=='进行中'&&old)throw Error('应聘已结束，不能变更安排');
     if(result.time){if(index===0)validateFirstSchedule({...next,rounds:old?.rounds||[result]},result);validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
     else if(oldRound?.time||result.location||result.focus)throw Error('请完整填写面试安排');

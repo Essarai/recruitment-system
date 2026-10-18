@@ -75,7 +75,7 @@ export function mountInterviewMcp(app,{pool,s3,bucket}){
   const match=/^Bearer (recruit_mcp_[a-f0-9]{64})$/.exec(req.headers.authorization||'');
   if(!match)return res.status(401).set('WWW-Authenticate','Bearer realm="recruitment-mcp"').json({error:'请使用个人 MCP Token'});
   const [[user]]=await pool.execute(`SELECT u.id,u.username,u.name,u.role,t.can_write AS canWrite FROM recruitment_mcp_tokens t JOIN recruitment_users u ON u.id=t.user_id
-   WHERE t.token_hash=? AND t.expires_at>UTC_TIMESTAMP() AND u.role='interviewer'`,[tokenHash(match[1])]);
+   WHERE t.token_hash=? AND t.expires_at>UTC_TIMESTAMP() AND u.role='interviewer' AND u.frozen=FALSE`,[tokenHash(match[1])]);
   if(!user)return res.status(401).set('WWW-Authenticate','Bearer error="invalid_token"').json({error:'Token 已过期或已撤销'});
   req.user=user;next();
  });

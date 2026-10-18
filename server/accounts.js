@@ -1,3 +1,4 @@
+import {hashPassword} from './auth.js';
 import {canManageAccounts} from '../src/permissions.js';
 export async function setAccountFrozen(pool,actor,targetId,frozen){
  if(!canManageAccounts(actor))throw Object.assign(Error('仅管理员可以管理账号'),{status:403});
@@ -12,6 +13,22 @@ export async function setAccountFrozen(pool,actor,targetId,frozen){
   await conn.execute('UPDATE recruitment_users SET frozen=? WHERE id=?',[frozen,target.id]);
   if(frozen){await conn.execute('DELETE FROM recruitment_sessions WHERE user_id=?',[target.id]);await conn.execute('DELETE FROM recruitment_mcp_tokens WHERE user_id=?',[target.id]);}
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[actor.id,frozen?'冻结账号':'启用账号',target.id]);
+  await conn.commit();return {ok:true};
+ }catch(error){await conn.rollback();throw error;}finally{conn.release();}
+}
+
+export async function resetAccountPassword(pool,actor,targetId,password){
+ if(!canManageAccounts(actor))throw Object.assign(Error('仅管理员可以管理账号'),{status:403});
+ const hash=await hashPassword(password);
+ const conn=await pool.getConnection();try{
+  await conn.beginTransaction();
+  const [accounts]=await conn.query('SELECT id,role,frozen FROM recruitment_users ORDER BY id FOR UPDATE');
+  if(!accounts.some(u=>u.id===actor.id&&u.role==='admin'&&!u.frozen))throw Object.assign(Error('管理员权限已失效'),{status:403});
+  if(!accounts.some(u=>u.id===targetId))throw Error('账号不存在');
+  await conn.execute('UPDATE recruitment_users SET password_hash=? WHERE id=?',[hash,targetId]);
+  await conn.execute('DELETE FROM recruitment_sessions WHERE user_id=?',[targetId]);
+  await conn.execute('DELETE FROM recruitment_mcp_tokens WHERE user_id=?',[targetId]);
+  await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[actor.id,'重置账号密码',targetId]);
   await conn.commit();return {ok:true};
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}
 }

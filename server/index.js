@@ -1,5 +1,5 @@
 import {isRecruiter,canManageAccounts} from '../src/permissions.js';
-import {setAccountFrozen} from './accounts.js';
+import {setAccountFrozen,resetAccountPassword} from './accounts.js';
 import {uploadInterviewTranscript} from './transcript-upload.js';
 import {saveInterviewFeedback} from './feedback.js';
 import {mountInterviewMcp,mountMcpTokenManagement} from './mcp.js';
@@ -49,6 +49,7 @@ app.post('/api/password',express.json({limit:'4kb'}),async(req,res)=>{
 });
 app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool);res.json({user:req.user,data:visibleState(state,req.user,await users(pool),revision)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
+app.post('/api/users/:id/password',admin,express.json({limit:'4kb'}),async(req,res)=>{const result=await resetAccountPassword(pool,req.user,req.params.id,req.body.password);if(req.params.id===req.user.id)res.clearCookie('recruitment_session',{path:'/api'});res.json(result);});
 app.patch('/api/users/:id/status',admin,express.json({limit:'1kb'}),async(req,res)=>res.json(await setAccountFrozen(pool,req.user,req.params.id,req.body.frozen)));
 app.post('/api/users',admin,express.json({limit:'8kb'}),async(req,res)=>{
  const username=text(req.body.username,'登录账号',80,true),name=text(req.body.name,'姓名',100,true),role=req.body.role;

@@ -125,9 +125,20 @@ try{
  assert.equal(a.rounds[0].feedback.transcript.id,transcript.id);assert.equal((await fetch(origin+'/api/transcripts/'+transcript.id,{headers:{Cookie:hr},redirect:'manual'})).status,302);
  a.rounds[0].feedback={...a.rounds[0].feedback,status:'returned',returnReason:'联调退回'};await api('/state',{method:'POST',cookie:hr,body:hrState});
  hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);const beforeFailure=(await api('/state',{cookie:interviewer})).value.data;await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:beforeFailure.revision,completed:true,feedback:{summary:'本轮不通过',conclusion:'建议不通过'}}});hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'未录用');assert.match(a.reason,/初试不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(hrState.applications.find(a=>a.id===ids.closedApp).status,'未录用');
+ const resetPassword=randomBytes(24).toString('hex');
+ await api('/users/'+ids.other+'/password',{method:'POST',cookie:hr,body:{password:resetPassword},status:403});
+ await api('/users/'+ids.other+'/password',{method:'POST',cookie:interviewer,body:{password:resetPassword},status:403});
+ await api('/users/'+ids.other+'/password',{method:'POST',cookie:admin,body:{password:'short'},status:400});
  const freezeToken=(await api('/mcp-token',{method:'POST',cookie:other})).value.token;
  await api('/users/'+ids.other+'/status',{method:'PATCH',cookie:admin,body:{frozen:true}});await api('/state',{cookie:other,status:401});await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password},status:403});assert.equal((await tokenRequest(freezeToken)).status,401);
  await api('/users/'+ids.other+'/status',{method:'PATCH',cookie:admin,body:{frozen:false}});await api('/state',{cookie:other,status:401});assert.equal((await tokenRequest(freezeToken)).status,401);await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password}});
+ const beforeReset=(await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password}})).cookie;
+ const resetToken=(await api('/mcp-token',{method:'POST',cookie:beforeReset})).value.token;
+ await api('/users/'+ids.other+'/password',{method:'POST',cookie:admin,body:{password:resetPassword}});
+ await api('/state',{cookie:beforeReset,status:401});assert.equal((await tokenRequest(resetToken)).status,401);
+ await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password},status:401});
+ await api('/login',{method:'POST',body:{username:`smoke_other_${tag}`,password:resetPassword}});
+
  const newPassword=randomBytes(24).toString('hex');await api('/password',{method:'POST',cookie:interviewer,body:{currentPassword:password,password:newPassword}});await api('/state',{cookie:interviewer,status:401});assert.equal((await tokenRequest(mcpToken)).status,401);const renewed=(await api('/login',{method:'POST',body:{username:`smoke_interviewer_${tag}`,password:newPassword}})).cookie;await api('/logout',{method:'POST',cookie:renewed});await api('/state',{cookie:renewed,status:401});
  passed=true;console.log('PASS: scoped read/write MCP, confirmed draft saves and transcript uploads, token rotation/expiry/revocation, transcript upload/privacy/locking and first-round screening, decline/terminate/recall/accept and failed-feedback termination, pre-schedule private resume access, scheduling guard, MySQL persistence, private S3 upload/read, login, administrator/HR/interviewer separation, freezing and credential revocation, concurrency conflict, feedback draft/submit/return and final outcome.');
 }finally{

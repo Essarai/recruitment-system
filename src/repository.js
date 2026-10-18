@@ -45,3 +45,5 @@ export async function decideScreening(appId,decision,reason){
 export const parseResume=(file,signal)=>request('/resumes/parse?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file,signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
 
 export const setAccountFrozen=(id,frozen)=>request('/users/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({frozen})});
+
+export const resetAccountPassword=(id,password)=>request('/users/'+encodeURIComponent(id)+'/password',{method:'POST',body:JSON.stringify({password})});

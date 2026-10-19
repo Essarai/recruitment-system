@@ -54,7 +54,7 @@ try{
  await api('/resumes/'+fileId+'/url',{cookie:interviewer,status:404});
  let resend=await get();resend.applications.find(a=>a.id===ids.app).screening={status:'pending',interviewer:`联调interviewer_${tag}`};await api('/state',{method:'POST',cookie:hr,body:resend,status:400});
  const updatedResume=(await api('/resumes?name=updated-resume.pdf',{method:'POST',cookie:hr,body:pdf,headers:{'Content-Type':'application/octet-stream'},status:201})).value;
- const profileUpdate=await get();profileUpdate.candidates.find(c=>c.id===ids.candidate).resumes=[updatedResume];await api('/state',{method:'POST',cookie:hr,body:profileUpdate});
+ const profileUpdate=await get();profileUpdate.candidates.find(c=>c.id===ids.candidate).resumes.unshift(updatedResume);await api('/state',{method:'POST',cookie:hr,body:profileUpdate});
  const updatedProfile=await get();assert.equal(updatedProfile.candidates.find(c=>c.id===ids.candidate).resumes[0].id,updatedResume.id);assert.equal(updatedProfile.applications.find(a=>a.id===ids.app).resume.id,fileId);
  await api('/resumes/'+updatedResume.id+'/url',{cookie:hr});await api('/resumes/'+updatedResume.id+'/url',{cookie:interviewer,status:404});
  ids.closedApp=ids.app;ids.app=randomUUID();application.id=ids.app;application.rounds=roundsFromTemplate(template);const recall=await get();recall.applications.push(application);await api('/state',{method:'POST',cookie:hr,body:recall});const recalledScreeningPath=`/applications/${ids.app}/screening`;

@@ -86,3 +86,7 @@ test('模板独立保存简历确认人，不覆盖一面默认面试官，并�
  assert.throws(()=>validateHRState(emptyState(),input,['甲','乙'],[],'HR',['乙']),/确认人/);
  assert.equal(validateHRState(saved,saved,['甲','乙'],[],'HR',['乙']).templates[0].reviewer,'甲');
 });
+test('独立确认人只获得是否已排期的摘要，不泄露其他面试官轮次或面评',()=>{
+ const original=state();original.applications[0].screening={interviewer:'确认人',status:'accepted'};
+ const view=visibleState(original,{role:'interviewer',name:'确认人'},[],1);assert.equal(view.applications[0].rounds.length,0);assert.equal(view.applications[0].screening.interviewsScheduled,true);assert.equal(original.applications[0].screening.interviewsScheduled,undefined);
+});

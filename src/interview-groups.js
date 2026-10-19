@@ -18,7 +18,7 @@ export function interviewGroups(data,person,query='',now=Date.now()){
   }
   upcoming.sort((a,b)=>new Date(a.round.time)-new Date(b.round.time));
   const reviews=tasks.filter(t=>t.kind==='screening').length,feedback=tasks.length-reviews;
-  const waiting=applications.filter(item=>item.screening&&item.app.screening.status==='accepted'&&!item.app.rounds.some(r=>r.time)).length;
+  const waiting=applications.filter(item=>item.screening&&item.app.screening.status==='accepted'&&!item.app.screening.interviewsScheduled&&!item.app.rounds.some(r=>r.time)).length;
   groups.push({candidate,applications,roundCount:rounds.length,reviews,feedback,waiting,tasks,upcoming});
  }
  return groups.sort((a,b)=>Number(!!(b.reviews||b.feedback))-Number(!!(a.reviews||a.feedback)));

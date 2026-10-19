@@ -37,7 +37,7 @@ test('简历库阶段按轮次和面评计算，不把已结束流程或欠交�
  assert.equal(applicationStage(app,now).name,'待推送简历');
  app.rounds[0].time='2026-10-18T12:00:00Z';assert.match(applicationStage(app,now).detail,/待面试/);
  app.rounds[0].time='2026-10-16T12:00:00Z';app.rounds[1].time='2026-10-19T12:00:00Z';assert.equal(applicationStage(app,now).name,'初试');assert.match(applicationStage(app,now).detail,/待提交面评/);
- app.rounds[0].feedback.status='returned';assert.match(applicationStage(app,now).detail,/面评待修改/);
+ app.rounds[0].feedback.status='returned';assert.match(applicationStage(app,now).detail,/待提交/);
  app.rounds[0].cancelled=true;assert.match(applicationStage(app,now).detail,/待重新安排/);
  app.rounds[0].feedback.status='submitted';assert.equal(applicationStage(app,now).name,'复试');assert.match(applicationStage(app,now).detail,/第 2 \/ 3 轮/);
  for(const r of app.rounds)r.feedback.status='submitted';assert.equal(applicationStage(app,now).name,'待 HR 决策');
@@ -52,7 +52,7 @@ test('进度颜色按实际待办区分，提交面评和录用不混为正在�
  app.screening.status='accepted';assert.equal(applicationStage(app,now).tone,'pending');
  const r=app.rounds[0];r.time='2026-10-19T10:00:00Z';assert.equal(applicationStage(app,now).tone,'interview');
  r.time='2026-10-17T10:00:00Z';assert.equal(applicationStage(app,now).tone,'feedback');
- r.feedback.status='returned';assert.equal(roundTone(r,now),'danger');
+ r.feedback.status='returned';assert.equal(roundTone(r,now),'feedback');
  r.cancelled=true;assert.equal(roundTone(r,now),'neutral');r.cancelled=false;
  r.feedback.status='submitted';assert.equal(roundTone(r,now),'success');assert.equal(applicationStage(app,now).tone,'pending');
  app.status='公司决定录用';assert.equal(applicationStage(app,now).tone,'success');

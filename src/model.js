@@ -56,14 +56,14 @@ export function applicationStage(app,now=Date.now()){
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
  const round=app.rounds[index];
- const status=round.cancelled?'待重新安排':!round.time?'待安排':round.feedback.status==='returned'?'面评待修改':new Date(round.time).getTime()<=now?'待提交面评':'待面试';
+ const status=round.cancelled?'待重新安排':!round.time?'待安排':round.feedback.status==='returned'?'待提交':new Date(round.time).getTime()<=now?'待提交面评':'待面试';
  return {tone:roundTone(round,now),name:round.name,detail:`第 ${index+1} / ${app.rounds.length} 轮 · ${status}`,round};
 }
 
 export function roundTone(round,now=Date.now()){
  if(round.cancelled)return 'neutral';
  if(round.feedback.status==='submitted')return round.feedback.conclusion==='建议不通过'?'danger':round.feedback.conclusion==='待定'?'pending':'success';
- if(round.feedback.status==='returned')return 'danger';
+ if(round.feedback.status==='returned')return 'feedback';
  if(!round.time)return 'pending';
  return new Date(round.time).getTime()<=now?'feedback':'interview';
 }

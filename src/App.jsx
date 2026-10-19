@@ -21,7 +21,7 @@ import settingsIcon from '@material-design-icons/svg/outlined/settings.svg';
 import personIcon from '@material-design-icons/svg/outlined/account_circle.svg';
 import closeIcon from '@material-design-icons/svg/outlined/close.svg';
 const date=t=>{if(!t)return '待安排';const d=new Date(t);return `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;};
-const feedbackLabel=r=>r.cancelled?'安排已取消':r.feedback.status==='submitted'?`面评已提交${r.feedback.conclusion==='待定'?' · 待定':''}`:r.feedback.status==='returned'?'已退回，待修改':r.feedback.status==='draft'?`面评草稿 · ${new Date(r.time)<new Date()?'时间已过，待反馈':'已安排'}`:!r.time?'待安排':new Date(r.time)<new Date()?'时间已过，待反馈':'已安排';
+const feedbackLabel=r=>r.cancelled?'安排已取消':r.feedback.status==='submitted'?`面评已提交${r.feedback.conclusion==='待定'?' · 待定':''}`:r.feedback.status==='returned'?'待提交':r.feedback.status==='draft'?`面评草稿 · ${new Date(r.time)<new Date()?'时间已过，待反馈':'已安排'}`:!r.time?'待安排':new Date(r.time)<new Date()?'时间已过，待反馈':'已安排';
 function Icon({src}){return <img className="icon" src={src} alt=""/>}
 function Field({label,children}){return <label className="field"><span>{label}</span>{children}</label>}
 function Modal({title,children,onClose}){const ref=useRef();useEffect(()=>{ref.current.showModal();},[]);return <dialog ref={ref} onCancel={onClose}><div className="dialog-head"><h2>{title}</h2><button className="icon-btn" aria-label="关闭" onClick={onClose}><Icon src={closeIcon}/></button></div>{children}</dialog>}

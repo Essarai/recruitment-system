@@ -60,3 +60,11 @@ test('版本未变只请求版本；业务或账号目录变化才拉正文，�
  const newer=await readUpdates();assert.equal(acceptUpdate(newer),true);assert.equal(await readUpdates(),null);sessionUserId='other-account';await assert.rejects(readUpdates(),error=>error.status===401);
  }finally{globalThis.fetch=original;}
 });
+
+
+test('保存明确指定的当前面评，不因其他记录或字段顺序变化误判，允许覆盖同一草稿',async()=>{
+ const original=globalThis.fetch;let patches=0;
+ const data={revision:5,applications:[{id:'app',rounds:[{id:'target',feedback:{status:'returned',summary:'原内容'}},{id:'other',feedback:{status:'draft',summary:'其他内容'}}]}]};
+ globalThis.fetch=async(path,options={})=>{if(!options.method)return Response.json({user:{role:'interviewer'},data});assert.equal(path,'/api/applications/app/rounds/target/feedback');const body=JSON.parse(options.body);assert.equal(body.feedback.summary,'覆盖后的内容');assert.equal(body.draft,true);patches++;return Response.json({...data,revision:5+patches});};
+ try{await load();const next=structuredClone(data);next.applications[0].rounds[0].feedback.summary='覆盖后的内容';next.applications[0].rounds[1].feedback.summary='不应随本次保存写入';await save(next,()=>{},{appId:'app',roundId:'target'});await save(next,()=>{},{appId:'app',roundId:'target'});assert.equal(patches,2);}finally{globalThis.fetch=original;}
+});

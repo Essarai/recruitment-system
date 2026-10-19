@@ -15,7 +15,7 @@ export const login=(username,password)=>request('/login',{method:'POST',body:JSO
 export const logout=()=>request('/logout',{method:'POST'});
 export const createUser=user=>request('/users',{method:'POST',body:JSON.stringify(user)});
 export const changePassword=password=>request('/password',{method:'POST',body:JSON.stringify(password)});
-export async function save(next,onProgress=()=>{}){
+export async function save(next,onProgress=()=>{},feedbackTarget=null){
  let result;
  if(isRecruiter(currentUser)){
   const payload={...next,candidates:next.candidates.map(c=>({...c,...(c.resumes?{resumes:c.resumes.map(r=>({...r}))}:{})})),applications:next.applications.map(app=>({...app}))};
@@ -25,6 +25,8 @@ export async function save(next,onProgress=()=>{}){
   result=await request('/state',{method:'POST',body:JSON.stringify(payload)});
  }else{
   const changed=[];
+  if(feedbackTarget){const app=next.applications.find(a=>a.id===feedbackTarget.appId),round=app?.rounds.find(r=>r.id===feedbackTarget.roundId);if(!round)throw Error('面评记录不存在，请刷新后重试');changed.push({app,round});}
+  else
   for(const app of next.applications)for(const round of app.rounds){const old=baseline.applications.find(a=>a.id===app.id)?.rounds.find(r=>r.id===round.id);if(old&&JSON.stringify(old.feedback)!==JSON.stringify(round.feedback))changed.push({app,round});}
   if(changed.length!==1)throw Error('每次只能保存本人的一份面评');
   const {app,round}=changed[0],feedback={...round.feedback};

@@ -13,8 +13,8 @@ export function CreateApplication({data,candidateId:initialId,role,busy,error,sa
  const active=data.applications.find(a=>a.candidateId===candidateId&&a.status==='进行中');
  const candidates=data.candidates.filter(c=>c.id===candidateId||`${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(query.toLowerCase()));
  const template=data.templates.find(t=>t.id===templateId);
- return <form onSubmit={async e=>{e.preventDefault();setError('');try{const next=structuredClone(data);next.applications.unshift(applicationFromCandidate(data,{candidateId,templateId,resumeId,reviewer},role));await commit(next,reviewer?'应聘已创建，简历已发送给确认人':'应聘已创建，无需简历确认，可直接安排面试');}catch(e){setError(e.message);}}}>
-  <p className="muted">从简历库选择候选人，确认本次简历版本后发起应聘。候选人资料和历史记录保持不变。</p>
+ return <form onSubmit={async e=>{e.preventDefault();setError('');try{const next=structuredClone(data);next.applications.unshift(applicationFromCandidate(data,{candidateId,templateId,resumeId,reviewer},role));await commit(next,reviewer?'应聘已创建，已加入确认人的待办':'应聘已创建，无需简历确认，可直接安排面试');}catch(e){setError(e.message);}}}>
+  <p className="muted">从简历库选择候选人，选择本次简历版本和招聘流程后创建应聘。候选人资料和历史记录保持不变。</p>
   <label className="field"><span>查找候选人</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索姓名、手机号或邮箱"/></label>
   <label className="field"><span>候选人 *</span><select required value={candidateId} onChange={e=>{setCandidateId(e.target.value);setResumeId(candidateResumes(data.candidates.find(c=>c.id===e.target.value),data.applications)[0]?.id||'');setError('');}}><option value="">请选择简历库中的候选人</option>{candidates.map(c=><option key={c.id} value={c.id}>{c.name} · {c.phone||c.email}{!canCreateApplication(data.applications,c.id)?' · 已有进行中的应聘':''}</option>)}</select></label>
   <p className="muted">{!candidates.length?'未找到候选人。':''}尚未入库？<button type="button" className="text-button" onClick={()=>open('import',{resumeApplication:true})}>前往导入简历</button></p>

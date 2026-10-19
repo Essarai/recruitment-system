@@ -43,11 +43,26 @@ test('北京时间日界线与无时区计划时间正确，错误日期和倒�
  for(const filters of [{from:'2026-02-30'},{to:'invalid'},{from:'2026-10-20',to:'2026-10-19'}])assert.throws(()=>buildRecruitmentDashboard(state,users,admin,filters,now),e=>e.status===400);
 });
 test('大盘接口仅管理员可访问，拒绝 HR/面试官时不读取业务数据',async()=>{
- let handler,reads=0;mountRecruitmentDashboard({get(path,fn){assert.equal(path,'/api/admin/recruitment-dashboard');handler=fn;}},{loadSnapshot:async()=>{reads++;return {state:fixture(),users};}});
+ let handler,reads=0;mountRecruitmentDashboard({get(path,fn){if(path==='/api/admin/recruitment-dashboard')handler=fn;}},{loadSnapshot:async()=>{reads++;return {state:fixture(),users};}});
  for(const role of ['HR','interviewer',undefined]){let status,result;await handler({user:{role},query:period},{status(value){status=value;return this;},json(value){result=value;}});assert.equal(status,403);assert.match(result.error,/仅管理员/);assert.equal(reads,0);assert.throws(()=>buildRecruitmentDashboard(fixture(),users,{role},period,now),e=>e.status===403);}
  let result;await handler({user:admin,query:period},{json(value){result=value;}});assert.equal(reads,1);assert.equal(result.overview.created,7);
 });
 test('空库不伪造转化或时效，负时长不进入中位数',()=>{
  const empty=buildRecruitmentDashboard({candidates:[],applications:[]},users,admin,period,now);assert.deepEqual(empty.overview,{created:0,ongoing:0,hired:0,terminated:0,imports:0});assert.equal(empty.conversion.cohort,0);assert.ok(empty.efficiency.every(r=>r.samples===0&&r.medianHours===null));
  const state=fixture();state.applications=[app('a','ha',date('10'),{screening:{status:'accepted',reviewedAt:date('09')},rounds:[round('初试',date('12'),{status:'submitted',submittedAt:date('11')})]})];const result=buildRecruitmentDashboard(state,users,admin,period,now);assert.equal(result.efficiency.find(r=>r.key==='confirmation').samples,0);assert.equal(result.efficiency.find(r=>r.key==='feedback').samples,0);
+});
+
+test('新版大盘统一创建批次，漏斗按应聘去重，岗位与个人汇总可核对',()=>{
+ const report=buildRecruitmentDashboard(fixture(),users,admin,period,now),a=report.analysis;
+ assert.equal(a.summary.created,7);assert.equal(a.summary.hired,0);assert.equal(a.summary.submitted,2);assert.equal(a.summary.passed,0);assert.equal(a.summary.failed,1);assert.equal(a.summary.passRate,0);assert.equal(a.summary.cycleSamples,1);assert.equal(a.summary.cycleHours,168);
+ assert.equal(a.people.reduce((s,p)=>s+p.created,0),a.summary.created);assert.equal(a.jobs.reduce((s,p)=>s+p.created,0),a.summary.created);
+ assert.equal(a.funnel.find(f=>f.key==='submitted').count,2);assert.equal(a.records.filter(r=>r.reached.submitted).length,2);assert.ok(!a.records.some(r=>r.id==='b'));
+ const candidate=fixture();candidate.applications=[app('a','ha',date('01'),{rounds:[round('初试',date('03'),{status:'submitted',conclusion:'建议通过',submittedAt:date('04')}),round('复试',date('05'),{status:'submitted',conclusion:'待定',submittedAt:date('06')})]})];const x=buildRecruitmentDashboard(candidate,users,admin,period,now).analysis;assert.equal(x.summary.submitted,1);assert.equal(x.funnel.find(f=>f.key==='passed').count,1);assert.equal(x.summary.passRate,1);
+});
+test('HR 大盘服务端强制本人范围，伪造 HR 筛选无效；面试官在读取前被拒绝',async()=>{
+ const r=buildRecruitmentDashboard(fixture(),users,users[0],{...period,hr:'hb'},now);assert.equal(r.filters.hr,'ha');assert.ok(r.analysis.records.every(a=>a.ownerId==='ha'));assert.ok(r.analysis.people.every(a=>a.id==='ha'));assert.equal(r.analysis.summary.created,4);
+ const routes=new Map();let reads=0;mountRecruitmentDashboard({get(path,fn){routes.set(path,fn);}},{loadSnapshot:async()=>{reads++;return {state:fixture(),users};}});let code,result;const res={status(n){code=n;return this;},json(v){result=v;}};await routes.get('/api/recruitment-dashboard')({user:{role:'interviewer'},query:{}},res);assert.equal(code,403);assert.equal(reads,0);await routes.get('/api/recruitment-dashboard')({user:users[0],query:{...period,hr:'hb'}},res);assert.equal(result.filters.hr,'ha');assert.ok(result.analysis.records.every(r=>r.ownerId==='ha'));
+});
+test('缺失前序记录时不伪造漏斗转化，零样本不伪造通过率和结束用时',()=>{
+ const state=fixture();state.applications=[app('a','ha',date('01'),{status:'公司决定录用',rounds:[]})];const a=buildRecruitmentDashboard(state,users,admin,period,now).analysis;assert.equal(a.funnel.find(f=>f.key==='hired').conversion,null);assert.equal(a.summary.passRate,null);assert.equal(a.summary.cycleHours,null);assert.equal(a.summary.hired,1);
 });

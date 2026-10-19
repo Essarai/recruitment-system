@@ -4,20 +4,19 @@ import schoolIcon from '@material-design-icons/svg/outlined/school.svg';
 import ageIcon from '@material-design-icons/svg/outlined/cake.svg';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
-import React,{useState} from 'react';
+import React from 'react';
 import {resumeSearchTerms,matchesResumeSearch} from './resume-search';
 import {workExperienceLabel,applicationStage,candidateResumes,canCreateApplication,educationOptions,profileFields} from './model';
 
-export function ResumeLibrary({data,query,open,archive}){
- const [draft,setDraft]=useState(''),[search,setSearch]=useState('');
- const terms=resumeSearchTerms(search),topTerms=resumeSearchTerms(query);
- const candidates=data.candidates.filter(c=>matchesResumeSearch(c,terms)&&matchesResumeSearch(c,topTerms));
- const resetKey=JSON.stringify([query,search]);
- function removeTerm(index){const next=terms.filter((_,i)=>i!==index).map(t=>t.token).join(' + ');setSearch(next);setDraft(next);}
+export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
+ const terms=resumeSearchTerms(query);
+ const candidates=data.candidates.filter(c=>matchesResumeSearch(c,terms));
+ function removeTerm(index){onQueryChange(terms.filter((_,i)=>i!==index).map(t=>t.token).join(' + '));}
 
  return <section className="resume-library">
-  <div className="title-row"><div><h1>简历库</h1><p className="muted">快速查看候选人背景，使用底部检索栏组合查找</p></div><button className="primary" onClick={()=>open('import')}>导入简历</button></div>
-  <PaginatedList items={candidates} resetKey={resetKey} label="简历库">{rows=><div className="table-wrap"><table><thead><tr><th>候选人资料</th><th>应聘概况</th><th>档案操作</th></tr></thead><tbody>
+  <div className="title-row"><div><h1>简历库</h1><p className="muted">顶部支持组合检索，例如“阿里 + 2年经验”；多个条件同时满足。</p></div><button className="primary" onClick={()=>open('import')}>导入简历</button></div>
+  {terms.length>0&&<div className="resume-query-summary">{terms.map((term,index)=><button className="search-condition" type="button" key={`${index}-${term.token}`} aria-label={`移除条件 ${term.label}`} onClick={()=>removeTerm(index)}>{term.label}<span aria-hidden="true">×</span></button>)}<small className="muted" role="status">匹配 {candidates.length} / {data.candidates.length} 人</small><button className="text-button" onClick={()=>onQueryChange('')}>清空条件</button></div>}
+  <PaginatedList items={candidates} resetKey={query} label="简历库">{rows=><div className="table-wrap"><table><thead><tr><th>候选人资料</th><th>应聘概况</th><th>档案操作</th></tr></thead><tbody>
    {rows.map(c=>{
     const apps=data.applications.filter(a=>a.candidateId===c.id),active=apps.find(a=>a.status==='进行中'),latest=apps[0],stage=applicationStage(active||latest),files=candidateResumes(c,data.applications);
     return <tr key={c.id}>
@@ -29,10 +28,7 @@ export function ResumeLibrary({data,query,open,archive}){
   </tbody></table></div>}</PaginatedList>
   {!candidates.length&&<div className="empty">{data.candidates.length?'没有匹配的候选人，请调整检索条件。':'暂无候选人，点击“导入简历”建立第一份档案。'}</div>}
   <div className="table-footer"><span>每位候选人一份档案，历次应聘与简历版本集中保留</span></div>
-  <form className="resume-search-dock" aria-label="简历库组合检索" onSubmit={e=>{e.preventDefault();setSearch(draft.trim());}}>
-   <div className="resume-search-line"><label htmlFor="resume-library-query">检索候选人</label><input id="resume-library-query" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="例如：阿里 + 2年经验，或 产品经理 + 硕士 + 杭州"/><button className="primary" type="submit">检索</button><button className="text-button" type="button" disabled={!draft&&!search} onClick={()=>{setDraft('');setSearch('');}}>清空</button><span className="search-result-count" role="status">{candidates.length} / {data.candidates.length} 人</span></div>
-   <div className="resume-search-conditions">{terms.length?terms.map((term,index)=><button className="search-condition" type="button" key={`${index}-${term.token}`} aria-label={`移除条件 ${term.label}`} onClick={()=>removeTerm(index)}>{term.label}<span aria-hidden="true">×</span></button>):<small className="muted">按已录入资料匹配，多个条件用 + 连接；年限支持“2年”“2年以上”“2–5年”。</small>}{terms.length>0&&<small className="muted">同时满足全部条件</small>}</div>
-  </form>
+
  </section>;
 }
 

@@ -2,7 +2,7 @@ import {canManageApplication} from '../src/permissions.js';
 import {candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {normalizeScreening} from './screening.js';
 import {isDeepStrictEqual as equal} from 'node:util';
-import {candidateDetails,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
+import {candidateDetails,validateCandidateIntake,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
 export function text(value,label,max=1000,required=false){if(value==null)value='';if(typeof value!=='string'||value.length>max||(required&&!value.trim()))throw Error(`${label}无效`);return value.trim();}
 function array(value,label,max=5000){if(!Array.isArray(value)||value.length>max)throw Error(`${label}无效`);return value;}
 function id(value){return text(value,'记录 ID',80,true);}
@@ -14,7 +14,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  const candidates=array(input.candidates,'候选人').map(c=>{
   const old=previous.candidates.find(x=>x.id===c.id);if(old&&equal(old,c))return structuredClone(old);
   const {resumes,...profile}=c,{resumes:oldResumes,...oldProfile}=old||{};
-  const result=old&&equal(oldProfile,profile)?structuredClone(old):{id:id(c.id),name:text(c.name,'姓名',100,true),...validateContacts({phone:text(c.phone,'手机号',64),email:text(c.email,'邮箱',254)}),...candidateDetails(c,true)};
+  const result=old&&equal(oldProfile,profile)?structuredClone(old):{id:id(c.id),name:text(c.name,'姓名',100,true),...validateContacts({phone:text(c.phone,'手机号',64),email:text(c.email,'邮箱',254)}),...validateCandidateIntake(c)};
   for(const [key] of profileFields)text(result[key],key,200);text(result.notes,'备注',2000);
   if(resumes||oldResumes){
    const versions=array(resumes||[],'简历版本',500);unique(versions,'简历版本');preserve(oldResumes||[],versions,'简历版本');

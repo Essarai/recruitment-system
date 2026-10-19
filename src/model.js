@@ -1,3 +1,4 @@
+export const highestEducationOptions=['博士','硕士','本科','大专'];
 export const educationOptions=['双九硕','单九硕','双二硕','单二硕','双非硕','九本','211本','普本','大专'];
 export function validateContacts(value){
  const phone=String(value.phone||'').trim(),email=String(value.email||'').trim();
@@ -7,11 +8,18 @@ export function validateContacts(value){
  return {phone,email};
 }
 export const canCreateApplication=(applications,candidateId)=>!applications.some(a=>a.candidateId===candidateId&&a.status==='进行中');
-export const profileFields = [['age','年龄（岁）'],['education','最高学历'],['experience','工作年限'],['company','现任公司'],['currentTitle','当前职位'],['city','所在城市']];
+export const profileFields = [['age','年龄（岁）'],['highestEducation','最高学历'],['education','学历背景'],['experience','工作年限'],['company','现任公司'],['currentTitle','当前职位'],['city','所在城市']];
 export function candidateDetails(value,requireEducation=false){
  const details=Object.fromEntries([...profileFields.map(([key])=>key),'notes'].map(key=>[key,String(value[key]??'').trim()]));
- if(details.age&&(!/^\d+$/.test(details.age)||Number(details.age)>120))throw Error('年龄请填写 0 至 120 之间的整数，或留空');
+ if(details.age&&(!/^\d+$/.test(details.age)||Number(details.age)>120))throw Error('年龄请填写 0 至 120 之间的整数');
+ if(details.highestEducation&&!highestEducationOptions.includes(details.highestEducation))throw Error('请选择有效的最高学历');
  if(requireEducation&&!educationOptions.includes(details.education))throw Error('请选择必填的学历分类');
+ return details;
+}
+export function validateCandidateIntake(value){
+ const details=candidateDetails(value,true);
+ for(const [key,label] of [['name','姓名'],['phone','手机号'],['email','邮箱'],...profileFields,['notes','HR 备注']])if(!String(value[key]??'').trim())throw Error(`请填写${label}`);
+ validateContacts(value);
  return details;
 }
 export const results = ['进行中','公司决定录用','未录用','候选人退出'];
@@ -82,7 +90,7 @@ export function reviewResume(app,person,decision,reason=''){
 
 export function mergeResumeFields(current,parsed,edited=new Set(),previous={}){
  const next={...current};
- for(const key of ['name','phone','email','age','education','experience','company','currentTitle','city']){
+ for(const key of ['name','phone','email','age','highestEducation','education','experience','company','currentTitle','city']){
   if(edited.has(key))continue;
   if(previous[key]&&next[key]===previous[key])next[key]='';
   if(!String(next[key]||'').trim()&&typeof parsed[key]==='string')next[key]=parsed[key];

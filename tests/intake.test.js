@@ -2,7 +2,7 @@ import {test} from 'node:test';import assert from 'node:assert/strict';
 import {applicationFromCandidate,candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {validateHRState} from '../server/validation.js';import {emptyState,visibleState} from '../server/database.js';
 const file={id:'file',name:'resume.pdf',mime:'application/pdf',size:100};
-const candidate={id:'c',name:'张三',phone:'13800138000',email:'person@example.com',education:'普本',resumes:[{id:file.id}]};
+const candidate={id:'c',name:'张三',phone:'13800138000',email:'person@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通',education:'普本',resumes:[{id:file.id}]};
 const template={id:'t',name:'产品经理',jd:'岗位职责',nodes:[{name:'初试',interviewer:'面试官'}]};
 const data=()=>({candidates:[structuredClone(candidate)],templates:[structuredClone(template)],users:[{role:'interviewer',name:'面试官'}],applications:[]});
 const selected={candidateId:'c',templateId:'t',resumeId:'file',reviewer:'面试官'};
@@ -47,4 +47,11 @@ test('创建时确认人可留空，无面试官账号也可建应聘；跳过�
  const pending=structuredClone(saved);pending.applications[0].screening={status:'pending',interviewer:'面试官',reason:''};const withReview=validateHRState(saved,pending,['面试官'],[file],'HR');
  const bypass=structuredClone(withReview);bypass.applications[0].screening={status:'skipped',interviewer:'',reason:''};assert.throws(()=>validateHRState(withReview,bypass,['面试官'],[file],'HR'),/不能代为接受/);
  delete bypass.applications[0].screening;assert.throws(()=>validateHRState(withReview,bypass,['面试官'],[file],'HR'));
+});
+
+test('服务端拒绝缺失任一候选人资料，最高学历单独持久化，已有档案未编辑时无需补填',()=>{
+ const full={...candidate,highestEducation:'本科'};
+ for(const key of ['name','phone','email','age','highestEducation','education','experience','company','currentTitle','city','notes'])assert.throws(()=>validateHRState(emptyState(),{...emptyState(),candidates:[{...full,[key]:''}]},[],[file],'HR'),key);
+ const saved=validateHRState(emptyState(),{...emptyState(),candidates:[full]},[],[file],'HR');assert.equal(saved.candidates[0].highestEducation,'本科');
+ const legacy=structuredClone(saved);delete legacy.candidates[0].highestEducation;assert.equal(validateHRState(legacy,structuredClone(legacy),[],[file],'HR').candidates[0].highestEducation,undefined);
 });

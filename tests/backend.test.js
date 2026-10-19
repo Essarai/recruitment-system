@@ -14,7 +14,7 @@ test('HR 保存不清除隐藏草稿，禁止代录、清除原记录及结束�
 test('初始数据库业务数据为空，未安排默认面试官不产生可见面试',()=>{assert.deepEqual(emptyState(),{candidates:[],applications:[],templates:[]});const s=state();s.applications[0].rounds[0].time='';assert.equal(visibleState(s,{name:'面试官甲',role:'interviewer'},[],0).applications.length,0);});
 
 test('新应聘岗位取自模板，学历与联系方式强校验，并阻止重复进行中',()=>{
- const c={id:'c',name:'新候选人',phone:'13800138000',email:'hr@example.com',education:'普本'},t={id:'t',name:'产品经理',nodes:[{name:'初试',interviewer:''}]};
+ const c={id:'c',name:'新候选人',phone:'13800138000',email:'hr@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通',education:'普本'},t={id:'t',name:'产品经理',nodes:[{name:'初试',interviewer:''}]};
  const make=()=>({candidates:[c],templates:[t],applications:[{id:'a',candidateId:'c',templateId:'t',job:'产品经理',status:'进行中',reason:'',resume:{id:file.id},history:[],rounds:[{...round('初试'),id:'r'}]}]});
  const valid=validateHRState(emptyState(),make(),[],[file],'HR');assert.equal(valid.applications[0].job,'产品经理');assert.equal(valid.applications[0].templateId,'t');
  const wrongJob=make();wrongJob.applications[0].job='随意岗位';assert.throws(()=>validateHRState(emptyState(),wrongJob,[],[file],'HR'),/流程名称/);
@@ -28,7 +28,7 @@ test('PDF 预签名链接有 300 秒期限，使用 inline 预览且不包含私
 test('独立简历确认后可安排不同面试官，确认只进行一次，HR 不可代确认',async()=>{
  const {decideScreening,canAccessResume}=await import('../server/screening.js');
  const t={id:'t-screen',name:'产品经理',nodes:[{name:'初试',interviewer:'甲'},{name:'复试',interviewer:'乙'}]};
- const input={candidates:[{id:'c-screen',name:'测试',phone:'13800000000',email:'',education:'普本'}],templates:[t],applications:[{id:'a-screen',candidateId:'c-screen',templateId:t.id,job:t.name,status:'进行中',resume:{id:file.id},rounds:[round('初试'),round('复试')],screening:{status:'pending',interviewer:'甲'},history:[]}]};
+ const input={candidates:[{id:'c-screen',name:'测试',phone:'13800000000',email:'screen@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通',education:'普本'}],templates:[t],applications:[{id:'a-screen',candidateId:'c-screen',templateId:t.id,job:t.name,status:'进行中',resume:{id:file.id},rounds:[round('初试'),round('复试')],screening:{status:'pending',interviewer:'甲'},history:[]}]};
  const names=['甲','乙'],hr={name:'HR',role:'HR'},first={name:'甲',role:'interviewer'},other={name:'乙',role:'interviewer'};
  const saved=validateHRState(emptyState(),input,names,[file],hr.name),app=saved.applications[0];
  assert.equal(canAccessResume(app,first),true);assert.equal(canAccessResume(app,other),false);
@@ -67,7 +67,7 @@ test('更新候选人简历保留应聘快照和历史版本；面试官看不�
 });
 
 test('流程 JD 可选且有长度校验；应聘取服务端模板快照，模板修改或伪造请求不改写历史',()=>{
- const c={id:'c',name:'候选人',phone:'13800138000',education:'普本'},template={id:'t',name:'产品经理',jd:'负责产品规划\n要求业务分析能力',nodes:[{name:'初试',interviewer:''}]};
+ const c={id:'c',name:'候选人',phone:'13800138000',email:'candidate@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通',education:'普本'},template={id:'t',name:'产品经理',jd:'负责产品规划\n要求业务分析能力',nodes:[{name:'初试',interviewer:''}]};
  const input={candidates:[c],templates:[template],applications:[{id:'a',candidateId:'c',templateId:'t',job:template.name,jd:'客户端伪造',status:'进行中',reason:'',resume:{id:file.id},rounds:[{...round('初试'),id:'r'}]}]};
  const saved=validateHRState(emptyState(),input,[],[file],'HR');assert.equal(saved.applications[0].jd,template.jd);
  const changed=structuredClone(saved);changed.templates[0].jd='新的岗位职责';changed.applications[0].jd='伪造改写';const updated=validateHRState(saved,changed,[],[file],'HR');assert.equal(updated.applications[0].jd,template.jd);assert.equal(updated.templates[0].jd,'新的岗位职责');
@@ -103,7 +103,7 @@ test('应聘所有权：其他 HR 可读不可改，保存自己记录时保留�
 test('历史应聘按最早创建日志识别所有者；新应聘创建者只取认证账号，不能伪造',async()=>{
  const {canManageApplication}=await import('../src/permissions.js');const hr={id:'hr-id',name:'HR甲',role:'HR'};
  const legacy={history:[{actor:'HR乙',action:'安排变更'},{actor:'HR甲',action:'创建应聘'}]};assert.equal(canManageApplication(hr,legacy),true);assert.equal(canManageApplication({...hr,name:'HR乙'},legacy),false);assert.equal(canManageApplication(hr,{history:[]}),false);assert.equal(canManageApplication({role:'admin'},{history:[]}),true);
- const previous=state();previous.applications=[];previous.candidates[0]={id:'candidate1',name:'测试',phone:'13800138000',email:'',education:'普本',resumes:[]};previous.templates=[{id:'t',name:'岗位',nodes:[{name:'初试',interviewer:''}]}];
+ const previous=state();previous.applications=[];previous.candidates[0]={id:'candidate1',name:'测试',phone:'13800138000',email:'',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通',education:'普本',resumes:[]};previous.templates=[{id:'t',name:'岗位',nodes:[{name:'初试',interviewer:''}]}];
  const input=structuredClone(previous);input.applications=[{id:'new',createdBy:'forged',candidateId:'candidate1',templateId:'t',job:'岗位',status:'进行中',resume:{id:file.id},screening:{status:'skipped',interviewer:''},rounds:[round('初试')]}];
  const saved=validateHRState(previous,input,[],[file],hr.name,[],hr);assert.equal(saved.applications[0].createdBy,hr.id);
 });

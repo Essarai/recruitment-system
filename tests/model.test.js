@@ -6,7 +6,7 @@ test('提交要求本人、完成确认和必填字段；不自动推进',()=>{c
 test('结束允许欠评，禁止新增安排，允许原面试官补交',()=>{const a=seed().applications[0];assert.throws(()=>endApplication(a,'公司决定录用',''));const ended=endApplication(a,'公司决定录用','确认录用');assert.equal(pending(ended),2);assert.throws(()=>validateSchedule(ended,ended.rounds[2],{}));assert.equal(submitFeedback(ended,ended.rounds[0],'陈晨',{summary:'补交',conclusion:'建议通过'},true).status,'submitted');});
 
 test('会议链接允许 HR 手动输入常见会议 URL，拒绝非网页协议和无效地址',()=>{const a=seed().applications[0],r=a.rounds[1];for(const location of ['https://meeting.tencent.com/dm/demo','https://meet.feishu.cn/demo?code=123'])validateSchedule(a,r,{interviewer:r.interviewer,time:r.time,mode:'线上',location});for(const location of ['javascript:alert(1)','https://','https://user:secret@example.com'])assert.throws(()=>validateSchedule(a,r,{interviewer:r.interviewer,time:r.time,mode:'线上',location}));});
-test('候选人扩展资料兼容旧记录，清理空白且不混入应聘字段',async()=>{const {candidateDetails}=await import('../src/model.js');assert.equal(candidateDetails({}).company,'');assert.deepEqual(candidateDetails({company:' 示例公司 ',experience:'5 年',notes:' 待沟通 ',job:'PM'}),{age:'',experience:'5 年',company:'示例公司',currentTitle:'',education:'',city:'',notes:'待沟通'});});
+test('候选人扩展资料兼容旧记录，清理空白且不混入应聘字段',async()=>{const {candidateDetails}=await import('../src/model.js');assert.equal(candidateDetails({}).company,'');assert.deepEqual(candidateDetails({company:' 示例公司 ',experience:'5 年',notes:' 待沟通 ',job:'PM'}),{age:'',highestEducation:'',experience:'5 年',company:'示例公司',currentTitle:'',education:'',city:'',notes:'待沟通'});});
 
 test('年龄选填并拒绝负数、小数与异常值',async()=>{const {candidateDetails}=await import('../src/model.js');assert.equal(candidateDetails({age:'28',education:'本科'}).age,'28');for(const age of ['-1','28.5','121','未知'])assert.throws(()=>candidateDetails({age}));assert.equal(candidateDetails({age:''}).age,'');});
 
@@ -109,4 +109,12 @@ test('待定可正式提交，保留应聘和后续安排，进度显示待定�
  assert.deepEqual(app.rounds.slice(1),before);assert.equal(roundTone(r),'pending');
  const step=applicationProgress(app).find(s=>s.id===r.id);assert.equal(step.done,true);assert.equal(step.tone,'pending');
  assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,conclusion:'建议通过'},true),/锁定/);
+});
+
+test('候选人最高学历独立于学历背景，所有候选人资料必填且旧档案可读取',async()=>{
+ const {validateCandidateIntake,candidateDetails}=await import('../src/model.js');
+ const complete={name:'测试',phone:'13800138000',email:'test@example.com',age:'28',highestEducation:'硕士',education:'双非硕',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通'};
+ assert.equal(validateCandidateIntake(complete).highestEducation,'硕士');assert.equal(validateCandidateIntake(complete).education,'双非硕');
+ for(const key of Object.keys(complete))assert.throws(()=>validateCandidateIntake({...complete,[key]:'  '}),key);
+ assert.throws(()=>validateCandidateIntake({...complete,highestEducation:'双九硕'}),/最高学历/);assert.equal(candidateDetails({education:'普本'}).highestEducation,'');
 });

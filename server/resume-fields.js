@@ -20,6 +20,7 @@ export function resumeFields(text){
  const education=labelValue('最高学历|学历|Education');
  if(educationOptions.includes(education))fields.education=education;
  const educationHint=education?.match(/博士|硕士|研究生|本科|大专|专科/)?.[0]||'';
+ if(educationHint&&educationHint!=='研究生')fields.highestEducation=educationHint==='专科'?'大专':educationHint;
  if(educationHint&&!fields.education)warnings.push(`识别到学历“${educationHint}”，请 HR 确认必填学历分类`);
  return {fields,warnings};
 }

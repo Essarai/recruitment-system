@@ -7,7 +7,7 @@ import {textPDF} from './text-pdf-fixture.js';
 
 test('按明确标签识别个人信息，硕士学历不推断为双九硕等分类',()=>{
  const result=resumeFields('姓名：李明\n手机号：+86 138-0013-8000\n邮箱：li.ming+hr@example.com\n年龄：28岁\n工作年限：5年\n现任公司：示例科技\n当前职位：产品经理\n现居地：杭州\n学历：硕士\n应聘岗位：总监');
- assert.deepEqual(result.fields,{name:'李明',phone:'13800138000',email:'li.ming+hr@example.com',age:'28',experience:'5年',company:'示例科技',currentTitle:'产品经理',city:'杭州'});
+ assert.deepEqual(result.fields,{name:'李明',phone:'13800138000',email:'li.ming+hr@example.com',age:'28',highestEducation:'硕士',experience:'5年',company:'示例科技',currentTitle:'产品经理',city:'杭州'});
  assert.match(result.warnings.join(''),/HR 确认/);assert.equal(result.fields.job,undefined);
  assert.equal(resumeFields('学历：双九硕').fields.education,'双九硕');
 });

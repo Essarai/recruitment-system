@@ -118,3 +118,8 @@ test('候选人最高学历独立于学历背景，所有候选人资料必填�
  for(const key of Object.keys(complete))assert.throws(()=>validateCandidateIntake({...complete,[key]:'  '}),key);
  assert.throws(()=>validateCandidateIntake({...complete,highestEducation:'双九硕'}),/最高学历/);assert.equal(candidateDetails({education:'普本'}).highestEducation,'');
 });
+
+
+test('工作经验展示补齐数字单位，兼容已带单位、应届和描述文本',async()=>{
+ const {workExperienceLabel}=await import('../src/model.js');assert.equal(workExperienceLabel('5'),'5 年工作经验');assert.equal(workExperienceLabel('3.5'),'3.5 年工作经验');assert.equal(workExperienceLabel('5年'),'5年工作经验');assert.equal(workExperienceLabel('3 年以上'),'3 年以上工作经验');assert.equal(workExperienceLabel('应届毕业生'),'工作经验：应届毕业生');assert.equal(workExperienceLabel('5 年工作经验'),'5 年工作经验');assert.equal(workExperienceLabel(''),'');
+});

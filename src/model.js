@@ -131,3 +131,10 @@ export function candidateResumes(candidate,applications){
  const seen=new Set(),versions=[...(candidate?.resumes||[]),...applications.filter(a=>a.candidateId===candidate?.id&&a.resume?.id).map(a=>({...a.resume,uploadedAt:a.history?.find(h=>h.action.startsWith('创建应聘'))?.at||''}))];
  return versions.sort((a,b)=>(Date.parse(b.uploadedAt)||0)-(Date.parse(a.uploadedAt)||0)).filter(file=>file?.id&&!seen.has(file.id)&&seen.add(file.id));
 }
+
+export function workExperienceLabel(value){
+ const text=String(value??'').trim();if(!text)return '';
+ if(/^\d+(?:\.\d+)?$/.test(text))return `${text} 年工作经验`;
+ if(/^\d+(?:\.\d+)?\s*(?:年|years?)(?:以上|以下|左右)?$/i.test(text))return `${text.replace(/years?/i,'年')}工作经验`;
+ return /工作经验|工作经历/.test(text)?text:`工作经验：${text}`;
+}

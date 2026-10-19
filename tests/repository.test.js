@@ -50,3 +50,13 @@ test('更新档案简历先上传再关联候选人，不变更应聘快照；�
   await save({...saved,applications:[...saved.applications,{id:'recall',resume:{id:'old-file'}}]});assert.deepEqual(calls,['/api/state']);
  }finally{globalThis.fetch=original;}
 });
+test('版本未变只请求版本；业务或账号目录变化才拉正文，读取不提前修改保存基线',async()=>{
+ const {readUpdates,acceptUpdate}=await import('../src/repository.js');const original=globalThis.fetch,calls=[];
+ let revision=10,directory='one',sessionUserId='sync-user';const user={id:'sync-user',role:'HR'};
+ globalThis.fetch=async(path,options={})=>{calls.push(path);if(path==='/api/state/version')return Response.json({revision,directoryVersion:directory,userId:sessionUserId});if(options.method==='POST'){const data=JSON.parse(options.body);assert.equal(data.revision,10);return Response.json({...data,revision:12});}return Response.json({user,data:{revision,candidates:[],applications:[]},directoryVersion:directory});};
+ try{const initial=await load();calls.length=0;assert.equal(await readUpdates(),null);assert.deepEqual(calls,['/api/state/version']);
+ revision=11;const update=await readUpdates();assert.equal(update.data.revision,11);await save(initial.data);assert.equal(acceptUpdate(update),false,'旧响应不能覆盖更新的本地保存结果');
+ revision=12;directory='two';assert.ok(await readUpdates());const before=calls.length;await readUpdates({force:true});assert.deepEqual(calls.slice(before),['/api/state']);
+ const newer=await readUpdates();assert.equal(acceptUpdate(newer),true);assert.equal(await readUpdates(),null);sessionUserId='other-account';await assert.rejects(readUpdates(),error=>error.status===401);
+ }finally{globalThis.fetch=original;}
+});

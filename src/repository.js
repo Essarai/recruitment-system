@@ -1,13 +1,16 @@
 import {isRecruiter} from './permissions.js';
 let currentUser=null;
 let baseline=null;
+let currentDirectoryVersion=null;
 const transcriptUploads=new WeakMap();
 export async function request(path,options={}){
  const response=await fetch('/api'+path,{credentials:'same-origin',...options,headers:{...(typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers}});
  if(!response.ok){let result;try{result=await response.json();}catch{result={error:'服务暂时不可用，请稍后重试'};}const error=Error(result.error||'请求失败');error.status=response.status;throw error;}
  return response.json();
 }
-export async function load(){const result=await request('/state');currentUser=result.user;baseline=structuredClone(result.data);if(globalThis.indexedDB){try{indexedDB.deleteDatabase('light-recruitment-v1');}catch{/* Old demo storage is no longer used. */}}return result;}
+export function acceptUpdate(result){if(currentUser&&result.user.id!==currentUser.id||baseline&&result.data.revision<baseline.revision)return false;currentUser=result.user;baseline=structuredClone(result.data);currentDirectoryVersion=result.directoryVersion;return true;}
+export async function readUpdates({force=false,signal}={}){if(!force){const version=await request('/state/version',{signal});if(version.userId&&version.userId!==currentUser?.id)throw Object.assign(Error('登录账号已变化，请重新登录'),{status:401});if(version.revision===baseline?.revision&&version.directoryVersion===currentDirectoryVersion)return null;}return request('/state',{signal});}
+export async function load(){const result=await request('/state');currentUser=result.user;baseline=structuredClone(result.data);currentDirectoryVersion=result.directoryVersion;if(globalThis.indexedDB){try{indexedDB.deleteDatabase('light-recruitment-v1');}catch{/* Old demo storage is no longer used. */}}return result;}
 export const login=(username,password)=>request('/login',{method:'POST',body:JSON.stringify({username,password})});
 export const logout=()=>request('/logout',{method:'POST'});
 export const createUser=user=>request('/users',{method:'POST',body:JSON.stringify(user)});

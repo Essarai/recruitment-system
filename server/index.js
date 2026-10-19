@@ -1,3 +1,4 @@
+import {directoryVersion,readVersion} from './state-version.js';
 import {isRecruiter,canManageAccounts} from '../src/permissions.js';
 import {setAccountFrozen,resetAccountPassword} from './accounts.js';
 import {uploadInterviewTranscript} from './transcript-upload.js';
@@ -47,7 +48,8 @@ app.post('/api/password',express.json({limit:'4kb'}),async(req,res)=>{
  const [[row]]=await pool.execute('SELECT password_hash FROM recruitment_users WHERE id=?',[req.user.id]);if(!await verifyPassword(req.body.currentPassword,row.password_hash))return res.status(400).json({error:'当前密码不正确'});
  const hash=await hashPassword(req.body.password);const conn=await pool.getConnection();try{await conn.beginTransaction();await conn.execute('UPDATE recruitment_users SET password_hash=? WHERE id=?',[hash,req.user.id]);await conn.execute('DELETE FROM recruitment_sessions WHERE user_id=?',[req.user.id]);await conn.execute('DELETE FROM recruitment_mcp_tokens WHERE user_id=?',[req.user.id]);await conn.commit();}catch(error){await conn.rollback();throw error;}finally{conn.release();}res.clearCookie('recruitment_session',{path:'/api'});res.json({ok:true});
 });
-app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool);res.json({user:req.user,data:visibleState(state,req.user,await users(pool),revision)});});
+app.get('/api/state/version',async(req,res)=>res.json({...await readVersion(pool),userId:req.user.id}));
+app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool),userList=await users(pool);res.json({user:req.user,data:visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
 app.post('/api/users/:id/password',admin,express.json({limit:'4kb'}),async(req,res)=>{const result=await resetAccountPassword(pool,req.user,req.params.id,req.body.password);if(req.params.id===req.user.id)res.clearCookie('recruitment_session',{path:'/api'});res.json(result);});
 app.patch('/api/users/:id/status',admin,express.json({limit:'1kb'}),async(req,res)=>res.json(await setAccountFrozen(pool,req.user,req.params.id,req.body.frozen)));

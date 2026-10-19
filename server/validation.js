@@ -1,3 +1,4 @@
+import {canManageApplication} from '../src/permissions.js';
 import {candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {normalizeScreening} from './screening.js';
 import {isDeepStrictEqual as equal} from 'node:util';
@@ -8,7 +9,7 @@ function id(value){return text(value,'记录 ID',80,true);}
 function unique(records,label){if(new Set(records.map(x=>x.id)).size!==records.length)throw Error(`${label}含重复 ID`);}
 function preserve(previous,next,label){if(previous.some(x=>!next.some(y=>y.id===x.id)))throw Error(`不能删除已有${label}`);}
 const scheduleKeys=['interviewer','time','mode','location','focus'];
-export function validateHRState(previous,input,interviewers,files,actor,activeInterviewers=interviewers){
+export function validateHRState(previous,input,interviewers,files,actor,activeInterviewers=interviewers,actorUser=null){
  const now=new Date().toISOString();
  const candidates=array(input.candidates,'候选人').map(c=>{
   const old=previous.candidates.find(x=>x.id===c.id);if(old&&equal(old,c))return structuredClone(old);
@@ -36,8 +37,15 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  const roundIds=new Set();const newApplicants=new Set();
  const applications=array(input.applications,'应聘记录').map(a=>{
   const old=previous.applications.find(x=>x.id===a.id);const candidateId=id(a.candidateId);
+  if(old&&actorUser&&!canManageApplication(actorUser,old)){
+   const expected=structuredClone(old);for(const r of expected.rounds)if(['none','draft','returned'].includes(r.feedback.status))r.feedback={status:r.feedback.status,returnReason:r.feedback.returnReason||''};
+   const comparable=value=>{const {history,...rest}=value;return JSON.parse(JSON.stringify(rest));};
+   if(!equal(comparable(expected),comparable(a)))throw Object.assign(Error('仅创建该应聘的 HR 或管理员可以操作，其他 HR 仅可查看'),{status:403});
+   for(const r of old.rounds){if(roundIds.has(r.id))throw Error('面试节点 ID 不能重复');roundIds.add(r.id);}
+   return structuredClone(old);
+  }
   if(!candidates.some(c=>c.id===candidateId))throw Error('应聘关联的候选人不存在');
-  const next={id:id(a.id),candidateId,templateId:old?.templateId,job:text(a.job,'岗位',160,true),...(old?.jd!==undefined?{jd:old.jd}:{}),status:a.status,reason:text(a.reason,'结束原因',2000),endedAt:old?.endedAt||undefined,resume:null,rounds:[],history:old?.history||[]};
+  const next={...(old?.createdBy?{createdBy:old.createdBy}:!old&&actorUser?{createdBy:actorUser.id}:{}),id:id(a.id),candidateId,templateId:old?.templateId,job:text(a.job,'岗位',160,true),...(old?.jd!==undefined?{jd:old.jd}:{}),status:a.status,reason:text(a.reason,'结束原因',2000),endedAt:old?.endedAt||undefined,resume:null,rounds:[],history:old?.history||[]};
   if(old&&(old.candidateId!==candidateId||old.job!==next.job))throw Error('不能更换已有应聘的候选人或岗位');
   if(old){if(old.status!==a.status){const ended=endApplication(old,a.status,next.reason);next.endedAt=ended.endedAt;}else if(old.reason!==next.reason)throw Error('不能改写已保存的结束原因');}
   else if(a.status!=='进行中'||next.reason)throw Error('新应聘必须为进行中');

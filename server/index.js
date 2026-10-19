@@ -67,7 +67,7 @@ app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>{
    UNION ALL SELECT 'file',id,NULL,name,NULL,NULL,mime,size FROM recruitment_files WHERE object_key LIKE 'resumes/%'`);
   const userList=context.filter(row=>row.kind==='user').map(({id,username,name,role,frozen})=>({id,username,name,role,frozen}));
   const files=context.filter(row=>row.kind==='file');
-  const state=validateHRState(previous,req.body,userList.filter(u=>u.role==='interviewer').map(u=>u.name),files,req.user.name,userList.filter(u=>u.role==='interviewer'&&!u.frozen).map(u=>u.name));
+  const state=validateHRState(previous,req.body,userList.filter(u=>u.role==='interviewer').map(u=>u.name),files,req.user.name,userList.filter(u=>u.role==='interviewer'&&!u.frozen).map(u=>u.name),req.user);
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,'更新招聘数据','state']);await conn.commit();res.json(visibleState(state,req.user,userList,revision+1));
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}

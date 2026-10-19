@@ -90,3 +90,20 @@ test('独立确认人只获得是否已排期的摘要，不泄露其他面试�
  const original=state();original.applications[0].screening={interviewer:'确认人',status:'accepted'};
  const view=visibleState(original,{role:'interviewer',name:'确认人'},[],1);assert.equal(view.applications[0].rounds.length,0);assert.equal(view.applications[0].screening.interviewsScheduled,true);assert.equal(original.applications[0].screening.interviewsScheduled,undefined);
 });
+
+test('应聘所有权：其他 HR 可读不可改，保存自己记录时保留他人隐藏草稿，管理员可操作',()=>{
+ const previous=state(),owner={id:'owner',name:'HR甲',role:'HR'},other={id:'other',name:'HR乙',role:'HR'},admin={id:'admin',name:'管理员',role:'admin'},names=['面试官甲','面试官乙'];previous.applications[0].createdBy=owner.id;
+ const view=visibleState(previous,other,[],1);assert.equal(view.applications.length,1);
+ const save=(input,user)=>validateHRState(previous,input,names,[file],user.name,names,user);
+ assert.equal(save(view,other).applications[0].rounds[0].feedback.summary,'草稿内容');
+ for(const mutate of [a=>{a.rounds[0].location='https://example.com/new';},a=>{a.status='未录用';a.reason='结束';},a=>{a.screening={status:'pending',interviewer:'面试官甲'};},a=>{a.createdBy=other.id;},a=>{a.rounds.push({...round('加面'),id:'added'});}]){const input=structuredClone(view);mutate(input.applications[0]);assert.throws(()=>save(input,other),e=>e.status===403);}
+ const update=structuredClone(view);update.applications[0].rounds[0].location='https://example.com/new';
+ assert.equal(save(update,owner).applications[0].createdBy,owner.id);assert.equal(save(update,admin).applications[0].rounds[0].location,'https://example.com/new');
+});
+test('历史应聘按最早创建日志识别所有者；新应聘创建者只取认证账号，不能伪造',async()=>{
+ const {canManageApplication}=await import('../src/permissions.js');const hr={id:'hr-id',name:'HR甲',role:'HR'};
+ const legacy={history:[{actor:'HR乙',action:'安排变更'},{actor:'HR甲',action:'创建应聘'}]};assert.equal(canManageApplication(hr,legacy),true);assert.equal(canManageApplication({...hr,name:'HR乙'},legacy),false);assert.equal(canManageApplication(hr,{history:[]}),false);assert.equal(canManageApplication({role:'admin'},{history:[]}),true);
+ const previous=state();previous.applications=[];previous.candidates[0]={id:'candidate1',name:'测试',phone:'13800138000',email:'',education:'普本',resumes:[]};previous.templates=[{id:'t',name:'岗位',nodes:[{name:'初试',interviewer:''}]}];
+ const input=structuredClone(previous);input.applications=[{id:'new',createdBy:'forged',candidateId:'candidate1',templateId:'t',job:'岗位',status:'进行中',resume:{id:file.id},screening:{status:'skipped',interviewer:''},rounds:[round('初试')]}];
+ const saved=validateHRState(previous,input,[],[file],hr.name,[],hr);assert.equal(saved.applications[0].createdBy,hr.id);
+});

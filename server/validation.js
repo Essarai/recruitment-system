@@ -23,6 +23,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
     return {id:file.id,name:file.name,type:file.mime,size:file.size,uploadedAt:oldResumes?.find(f=>f.id===file.id)?.uploadedAt||now};
    });
   }
+  if(old?.createdAt)result.createdAt=old.createdAt;else if(!old)result.createdAt=now;
+  result.updatedAt=now;
   return result;
  });
  unique(candidates,'候选人');preserve(previous.candidates,candidates,'候选人');

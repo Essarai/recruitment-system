@@ -19,7 +19,7 @@ export function resumeSearchTerms(query){
  });
 }
 export function matchesResumeSearch(candidate,terms){
- const text=normalize([candidate.name,candidate.phone,candidate.email,candidate.company,candidate.currentTitle,candidate.city,candidate.highestEducation,candidate.education].filter(Boolean).join(' '));
+ const text=normalize([candidate.name,candidate.phone,candidate.email,candidate.company,candidate.currentTitle,candidate.city,candidate.highestEducation,candidate.education,candidate.notes].filter(Boolean).join(' '));
  return terms.every(term=>{
   if(term.kind==='keyword')return text.includes(term.token);
   const bounds=experienceBounds(candidate.experience);if(!bounds)return false;

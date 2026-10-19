@@ -3,7 +3,8 @@ import React,{useState} from 'react';
 import {applicationStage,applicationProgress,educationOptions,nextInterview,pending,applicationStatus} from './model';
 export function ApplicationList({data,query,open,select,date}){
  const [job,setJob]=useState(''),[status,setStatus]=useState(''),[person,setPerson]=useState('');
- const candidate=a=>data.candidates.find(c=>c.id===a.candidateId);
+ const candidateMap=new Map(data.candidates.map(c=>[c.id,c]));
+ const candidate=a=>candidateMap.get(a.candidateId);
  const list=data.applications.filter(a=>{const c=candidate(a);return `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(query.toLowerCase())&&(!job||a.job===job)&&(!status||applicationStatus(a)===status)&&(!person||a.screening?.interviewer===person||a.rounds.some(r=>r.interviewer===person));});
  return <section className="application-list">
   <div className="title-row"><div><h1>应聘列表</h1><p className="muted">先查看详情，再处理简历确认、面试安排和面评</p></div><button className="primary" onClick={()=>open('createApplication')}>创建应聘</button></div>

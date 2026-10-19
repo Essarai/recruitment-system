@@ -7,12 +7,13 @@ export function text(value,label,max=1000,required=false){if(value==null)value='
 function array(value,label,max=5000){if(!Array.isArray(value)||value.length>max)throw Error(`${label}无效`);return value;}
 function id(value){return text(value,'记录 ID',80,true);}
 function unique(records,label){if(new Set(records.map(x=>x.id)).size!==records.length)throw Error(`${label}含重复 ID`);}
-function preserve(previous,next,label){if(previous.some(x=>!next.some(y=>y.id===x.id)))throw Error(`不能删除已有${label}`);}
+function preserve(previous,next,label){const ids=new Set(next.map(x=>x.id));if(previous.some(x=>!ids.has(x.id)))throw Error(`不能删除已有${label}`);}
 const scheduleKeys=['interviewer','time','mode','location','focus'];
 export function validateHRState(previous,input,interviewers,files,actor,activeInterviewers=interviewers,actorUser=null){
  const now=new Date().toISOString();
- const candidates=array(input.candidates,'候选人').map(c=>{
-  const old=previous.candidates.find(x=>x.id===c.id);if(old&&equal(old,c))return structuredClone(old);
+ const oldCandidates=new Map(previous.candidates.map(c=>[c.id,c]));
+ const candidates=array(input.candidates,'候选人',20000).map(c=>{
+  const old=oldCandidates.get(c.id);if(old&&equal(old,c))return structuredClone(old);
   const {resumes,...profile}=c,{resumes:oldResumes,...oldProfile}=old||{};
   const result=old&&equal(oldProfile,profile)?structuredClone(old):{id:id(c.id),name:text(c.name,'姓名',100,true),...validateContacts({phone:text(c.phone,'手机号',64),email:text(c.email,'邮箱',254)}),...validateCandidateIntake(c)};
   for(const [key] of profileFields)text(result[key],key,200);text(result.notes,'备注',2000);
@@ -28,7 +29,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   return result;
  });
  unique(candidates,'候选人');preserve(previous.candidates,candidates,'候选人');
- for(const candidate of candidates)if(!previous.candidates.some(c=>c.id===candidate.id)&&candidateMatches(candidates,candidate).some(other=>sameCandidateContact(other,candidate)))throw Error('手机号或邮箱已存在，请打开原候选人档案并更新简历');
+ for(const candidate of candidates)if(!oldCandidates.has(candidate.id)&&candidateMatches(candidates,candidate).some(other=>sameCandidateContact(other,candidate)))throw Error('手机号或邮箱已存在，请打开原候选人档案并更新简历');
  const templates=array(input.templates,'流程模板',100).map(t=>{
   const nodes=templateNodes(array(t.nodes,'流程节点',50),interviewers),old=previous.templates.find(x=>x.id===t.id);
   if(nodes.some((n,i)=>n.interviewer&&!activeInterviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('不能将已冻结账号设为默认面试官');

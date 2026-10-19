@@ -4,28 +4,33 @@ import schoolIcon from '@material-design-icons/svg/outlined/school.svg';
 import ageIcon from '@material-design-icons/svg/outlined/cake.svg';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
-import React from 'react';
-import {resumeSearchTerms,matchesResumeSearch} from './resume-search';
+import React,{useState} from 'react';
+import {useResumeSearch} from './useResumeSearch';
+import {resumeSearchTerms} from './resume-search';
 import {workExperienceLabel,applicationStage,candidateResumes,canCreateApplication,educationOptions,profileFields} from './model';
 
 export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
  const terms=resumeSearchTerms(query);
- const candidates=data.candidates.filter(c=>matchesResumeSearch(c,terms));
+ const [size,setSize]=useState(20);
+ const {result,loading,error,page,setPage,retry}=useResumeSearch(query,data.revision,size);
+ const candidates=result?.items||[];
  function removeTerm(index){onQueryChange(terms.filter((_,i)=>i!==index).map(t=>t.token).join(' + '));}
 
  return <section className="resume-library">
   <div className="title-row"><div><h1>简历库</h1><p className="muted">顶部支持组合检索，例如“阿里 + 2年经验”；多个条件同时满足。</p></div><button className="primary" onClick={()=>open('import')}>导入简历</button></div>
-  {terms.length>0&&<div className="resume-query-summary">{terms.map((term,index)=><button className="search-condition" type="button" key={`${index}-${term.token}`} aria-label={`移除条件 ${term.label}`} onClick={()=>removeTerm(index)}>{term.label}<span aria-hidden="true">×</span></button>)}<small className="muted" role="status">匹配 {candidates.length} / {data.candidates.length} 人</small><button className="text-button" onClick={()=>onQueryChange('')}>清空条件</button></div>}
-  <PaginatedList items={candidates} resetKey={query} label="简历库">{rows=><div className="table-wrap"><table><thead><tr><th>候选人资料</th><th>档案操作</th></tr></thead><tbody>
-   {rows.map(c=>{
-    const apps=data.applications.filter(a=>a.candidateId===c.id),active=apps.find(a=>a.status==='进行中'),latest=apps[0],stage=applicationStage(active||latest),files=candidateResumes(c,data.applications);
+  {terms.length>0&&<div className="resume-query-summary">{terms.map((term,index)=><button className="search-condition" type="button" key={`${index}-${term.token}`} aria-label={`移除条件 ${term.label}`} onClick={()=>removeTerm(index)}>{term.label}<span aria-hidden="true">×</span></button>)}<small className="muted" role="status">匹配 {result?.total??'…'} / {result?.libraryTotal??'…'} 人</small><button className="text-button" onClick={()=>onQueryChange('')}>清空条件</button></div>}
+  {error&&<div className="error" role="alert">{error}<button className="text-button" onClick={retry}>重试</button></div>}
+  {loading&&<p className="muted" role="status">正在查询简历…</p>}
+  <div className="table-wrap"><table><thead><tr><th>候选人资料</th><th>档案操作</th></tr></thead><tbody>
+   {candidates.map(({candidate:c,applicationCount,active,job,stage,files})=>{
     return <tr key={c.id}>
-     <td className="library-candidate-details"><div className="candidate-identity"><button className="name-link candidate-name" onClick={()=>archive(c.id)}>{c.name}</button><span className="candidate-application-summary">{latest?<><span>投递岗位：{(active||latest).job}</span><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span></>:<span>暂无应聘记录</span>}</span></div><div className="candidate-career"><span>{c.currentTitle||'职位待补充'}</span><span>{c.company||'公司待补充'}</span><span>{workExperienceLabel(c.experience)||'工作经验待补充'}</span><span>{c.city||'城市待补充'}</span></div><div className="candidate-meta-line">{[[phoneIcon,'电话',c.phone||'待补充','phone'],[emailIcon,'邮箱',c.email||'待补充','email'],[schoolIcon,'学历',[c.highestEducation||'待补充',educationOptions.includes(c.education)?c.education:''].filter(Boolean).join(' · '),'education'],[ageIcon,'年龄',c.age?`${c.age}岁`:'待补充','age']].map(([icon,label,value,key])=><span className={`candidate-meta-item meta-${key}`} key={key} title={`${label}：${value}`}><img src={icon} alt={label}/><span>{value}</span></span>)}</div>{c.notes&&<small className="sub candidate-note-preview" title={c.notes}>备注：{c.notes}</small>}</td>
-     <td><div className="library-actions">{files[0]?.id&&<ResumeLink app={{resume:files[0]}} className="text-button">{files[0].name.toLowerCase().endsWith('.pdf')?'预览简历':'下载简历'}</ResumeLink>}<button className="text-button" onClick={()=>archive(c.id)}>查看档案</button><button className="text-button" onClick={()=>open('candidate',{candidateId:c.id})}>编辑资料</button><button className="text-button" onClick={()=>open('candidateResume',{candidateId:c.id})}>更新简历</button>{canCreateApplication(data.applications,c.id)&&<button className="text-button" onClick={()=>open('createApplication',{candidateId:c.id})}>{apps.length?'重新捞起':'创建应聘'}</button>}</div><small className="sub library-version-count">{files.length?`${files.length} 份简历版本`:'暂无简历附件'}</small></td>
+     <td className="library-candidate-details"><div className="candidate-identity"><button className="name-link candidate-name" onClick={()=>archive(c.id)}>{c.name}</button><span className="candidate-application-summary">{applicationCount?<><span>投递岗位：{job}</span><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span></>:<span>暂无应聘记录</span>}</span></div><div className="candidate-career"><span>{c.currentTitle||'职位待补充'}</span><span>{c.company||'公司待补充'}</span><span>{workExperienceLabel(c.experience)||'工作经验待补充'}</span><span>{c.city||'城市待补充'}</span></div><div className="candidate-meta-line">{[[phoneIcon,'电话',c.phone||'待补充','phone'],[emailIcon,'邮箱',c.email||'待补充','email'],[schoolIcon,'学历',[c.highestEducation||'待补充',educationOptions.includes(c.education)?c.education:''].filter(Boolean).join(' · '),'education'],[ageIcon,'年龄',c.age?`${c.age}岁`:'待补充','age']].map(([icon,label,value,key])=><span className={`candidate-meta-item meta-${key}`} key={key} title={`${label}：${value}`}><img src={icon} alt={label}/><span>{value}</span></span>)}</div>{c.notes&&<small className="sub candidate-note-preview" title={c.notes}>备注：{c.notes}</small>}</td>
+     <td><div className="library-actions">{files[0]?.id&&<ResumeLink app={{resume:files[0]}} className="text-button">{files[0].name.toLowerCase().endsWith('.pdf')?'预览简历':'下载简历'}</ResumeLink>}<button className="text-button" onClick={()=>archive(c.id)}>查看档案</button><button className="text-button" onClick={()=>open('candidate',{candidateId:c.id})}>编辑资料</button><button className="text-button" onClick={()=>open('candidateResume',{candidateId:c.id})}>更新简历</button>{!active&&<button className="text-button" onClick={()=>open('createApplication',{candidateId:c.id})}>{applicationCount?'重新捞起':'创建应聘'}</button>}</div><small className="sub library-version-count">{files.length?`${files.length} 份简历版本`:'暂无简历附件'}</small></td>
     </tr>;
    })}
-  </tbody></table></div>}</PaginatedList>
-  {!candidates.length&&<div className="empty">{data.candidates.length?'没有匹配的候选人，请调整检索条件。':'暂无候选人，点击“导入简历”建立第一份档案。'}</div>}
+  </tbody></table></div>
+  {result&&<nav className="pagination" aria-label="简历库分页"><span className="pagination-total">共 {result.total} 条 · {result.total?(result.page-1)*size+1:0}–{Math.min(result.page*size,result.total)} 条</span><div className="pagination-controls"><label>每页 <select aria-label="简历库每页条数" value={size} onChange={e=>setSize(Number(e.target.value))}>{[10,20,50].map(n=><option key={n} value={n}>{n} 条</option>)}</select></label><button disabled={loading||result.page===1} onClick={()=>setPage(page-1)}>上一页</button><span aria-live="polite">{result.page} / {result.pages}</span><button disabled={loading||result.page===result.pages} onClick={()=>setPage(page+1)}>下一页</button></div></nav>}
+  {!loading&&!error&&result&&!candidates.length&&<div className="empty">{result.libraryTotal?'没有匹配的候选人，请调整检索条件。':'暂无候选人，点击“导入简历”建立第一份档案。'}</div>}
   <div className="table-footer"><span>每位候选人一份档案，历次应聘与简历版本集中保留</span></div>
 
  </section>;

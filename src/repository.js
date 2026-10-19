@@ -9,8 +9,9 @@ export async function request(path,options={}){
  return response.json();
 }
 export function acceptUpdate(result){if(currentUser&&result.user.id!==currentUser.id||baseline&&result.data.revision<baseline.revision)return false;currentUser=result.user;baseline=structuredClone(result.data);currentDirectoryVersion=result.directoryVersion;return true;}
-export async function readUpdates({force=false,signal}={}){if(!force){const version=await request('/state/version',{signal});if(version.userId&&version.userId!==currentUser?.id)throw Object.assign(Error('登录账号已变化，请重新登录'),{status:401});if(version.revision===baseline?.revision&&version.directoryVersion===currentDirectoryVersion)return null;}return request('/state',{signal});}
-export async function load(){const result=await request('/state');currentUser=result.user;baseline=structuredClone(result.data);currentDirectoryVersion=result.directoryVersion;if(globalThis.indexedDB){try{indexedDB.deleteDatabase('light-recruitment-v1');}catch{/* Old demo storage is no longer used. */}}return result;}
+const statePath=()=>'/state?compact=1'+(baseline?.partialCandidates?'&candidateIds='+encodeURIComponent(baseline.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-20).join(',')):'');
+export async function readUpdates({force=false,signal}={}){if(!force){const version=await request('/state/version',{signal});if(version.userId&&version.userId!==currentUser?.id)throw Object.assign(Error('登录账号已变化，请重新登录'),{status:401});if(version.revision===baseline?.revision&&version.directoryVersion===currentDirectoryVersion)return null;}return request(statePath(),{signal});}
+export async function load(){const result=await request('/state?compact=1');currentUser=result.user;baseline=structuredClone(result.data);currentDirectoryVersion=result.directoryVersion;if(globalThis.indexedDB){try{indexedDB.deleteDatabase('light-recruitment-v1');}catch{/* Old demo storage is no longer used. */}}return result;}
 export const login=(username,password)=>request('/login',{method:'POST',body:JSON.stringify({username,password})});
 export const logout=()=>request('/logout',{method:'POST'});
 export const createUser=user=>request('/users',{method:'POST',body:JSON.stringify(user)});
@@ -18,7 +19,7 @@ export const changePassword=password=>request('/password',{method:'POST',body:JS
 export async function save(next,onProgress=()=>{},feedbackTarget=null){
  let result;
  if(isRecruiter(currentUser)){
-  const payload={...next,candidates:next.candidates.map(c=>({...c,...(c.resumes?{resumes:c.resumes.map(r=>({...r}))}:{})})),applications:next.applications.map(app=>({...app}))};
+  const payload={...next,...(next.partialCandidates?{loadedCandidateIds:next.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-20)}:{}),candidates:next.candidates.map(c=>({...c,...(c.resumes?{resumes:c.resumes.map(r=>({...r}))}:{})})),applications:next.applications.map(app=>({...app}))};
   for(const candidate of payload.candidates)for(let i=0;i<(candidate.resumes||[]).length;i++){const version=candidate.resumes[i];if(version.file instanceof File){onProgress('正在上传简历…');candidate.resumes[i]=await request('/resumes?name='+encodeURIComponent(version.file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:version.file});}}
   for(const app of payload.applications){if(app.resume?.file instanceof File){const file=app.resume.file;onProgress('正在上传简历…');app.resume=await request('/resumes?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});}}
   onProgress('正在保存记录…');
@@ -52,3 +53,9 @@ export const parseResume=(file,signal)=>request('/resumes/parse?name='+encodeURI
 export const setAccountFrozen=(id,frozen)=>request('/users/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({frozen})});
 
 export const resetAccountPassword=(id,password)=>request('/users/'+encodeURIComponent(id)+'/password',{method:'POST',body:JSON.stringify({password})});
+
+export async function loadCandidate(id){
+ const result=await request('/candidates/'+encodeURIComponent(id));
+ if(!baseline||result.revision!==baseline.revision)throw Object.assign(Error('数据已更新，请刷新页面后重试'),{status:409});
+ const candidates=baseline.candidates.filter(c=>c.id!==id);candidates.push(result.candidate);baseline={...baseline,candidates};return structuredClone(baseline);
+}

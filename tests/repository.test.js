@@ -16,7 +16,7 @@ test('附件上传完成后才保存记录，并显示实际保存阶段；上�
   await load();const next={...data,applications:[{resume:{file:new File(['%PDF-1.4'],'sample.pdf')}}]};
   await save(next,label=>progress.push(label));
   assert.deepEqual(progress,['正在上传简历…','正在保存记录…']);
-  assert.deepEqual(calls,['/api/state','/api/resumes?name=sample.pdf','/api/state']);
+  assert.deepEqual(calls,['/api/state?compact=1','/api/resumes?name=sample.pdf','/api/state']);
   calls.length=0;failUpload=true;await assert.rejects(save(next),/上传失败/);
   assert.deepEqual(calls,['/api/resumes?name=sample.pdf']);
   assert.ok(next.applications[0].resume.file instanceof File,'失败后仍保留原始表单附件');
@@ -56,7 +56,7 @@ test('版本未变只请求版本；业务或账号目录变化才拉正文，�
  globalThis.fetch=async(path,options={})=>{calls.push(path);if(path==='/api/state/version')return Response.json({revision,directoryVersion:directory,userId:sessionUserId});if(options.method==='POST'){const data=JSON.parse(options.body);assert.equal(data.revision,10);return Response.json({...data,revision:12});}return Response.json({user,data:{revision,candidates:[],applications:[]},directoryVersion:directory});};
  try{const initial=await load();calls.length=0;assert.equal(await readUpdates(),null);assert.deepEqual(calls,['/api/state/version']);
  revision=11;const update=await readUpdates();assert.equal(update.data.revision,11);await save(initial.data);assert.equal(acceptUpdate(update),false,'旧响应不能覆盖更新的本地保存结果');
- revision=12;directory='two';assert.ok(await readUpdates());const before=calls.length;await readUpdates({force:true});assert.deepEqual(calls.slice(before),['/api/state']);
+ revision=12;directory='two';assert.ok(await readUpdates());const before=calls.length;await readUpdates({force:true});assert.deepEqual(calls.slice(before),['/api/state?compact=1']);
  const newer=await readUpdates();assert.equal(acceptUpdate(newer),true);assert.equal(await readUpdates(),null);sessionUserId='other-account';await assert.rejects(readUpdates(),error=>error.status===401);
  }finally{globalThis.fetch=original;}
 });
@@ -67,4 +67,11 @@ test('保存明确指定的当前面评，不因其他记录或字段顺序变�
  const data={revision:5,applications:[{id:'app',rounds:[{id:'target',feedback:{status:'returned',summary:'原内容'}},{id:'other',feedback:{status:'draft',summary:'其他内容'}}]}]};
  globalThis.fetch=async(path,options={})=>{if(!options.method)return Response.json({user:{role:'interviewer'},data});assert.equal(path,'/api/applications/app/rounds/target/feedback');const body=JSON.parse(options.body);assert.equal(body.feedback.summary,'覆盖后的内容');assert.equal(body.draft,true);patches++;return Response.json({...data,revision:5+patches});};
  try{await load();const next=structuredClone(data);next.applications[0].rounds[0].feedback.summary='覆盖后的内容';next.applications[0].rounds[1].feedback.summary='不应随本次保存写入';await save(next,()=>{},{appId:'app',roundId:'target'});await save(next,()=>{},{appId:'app',roundId:'target'});assert.equal(patches,2);}finally{globalThis.fetch=original;}
+});
+
+test('按需读取完整档案，自动同步保留已加载 ID，过期详情不会覆盖当前基线',async()=>{
+ const {loadCandidate,readUpdates}=await import('../src/repository.js'),original=globalThis.fetch,calls=[];let revision=2;
+ const summary={id:'a',name:'候选人',_summary:true};
+ globalThis.fetch=async path=>{calls.push(path);if(path.startsWith('/api/candidates/'))return Response.json({revision,candidate:{id:'a',name:'候选人',notes:'完整备注',resumes:[]}});return Response.json({user:{id:'hr',role:'HR'},data:{partialCandidates:true,candidates:[summary],applications:[],revision:2}});};
+ try{await load();const data=await loadCandidate('a');assert.equal(data.candidates[0].notes,'完整备注');assert.equal(data.candidates[0]._summary,undefined);await readUpdates({force:true});assert.equal(calls.at(-1),'/api/state?compact=1&candidateIds=a');revision=3;await assert.rejects(loadCandidate('a'),e=>e.status===409);}finally{globalThis.fetch=original;}
 });

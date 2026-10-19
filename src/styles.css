@@ -152,3 +152,5 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 
 .progress-step[data-state="done"][data-tone="pending"] .progress-track{background:var(--progress-color)}
 .progress-step[data-state="done"][data-tone="pending"]>small{color:var(--progress-color)}
+
+.interview-work-heading{flex-wrap:nowrap;align-items:center}.interview-work-heading>.interview-candidate-name{min-width:0}.interview-work-heading>.stage-label{flex-shrink:0;white-space:nowrap;align-self:center}

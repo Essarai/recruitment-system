@@ -83,3 +83,5 @@ Feedback helper display clarified 2026-10-19: do not show return reasons in HR r
 Reviewer progress clarified 2026-10-19: accepted resume reviewers see whether the first interview is scheduled and a scheduled badge in full candidate records, using booleans only. Do not expose other interviewers’ arrangements or feedback. Resume-review helper states rejection immediately ends the application.
 
 Interviewer layout restored 2026-10-19: retain the 10:56 deployed layout (599a4b7), without the later workflow summary block. For accepted resume reviewers, replace the generic 面试已安排 card badge with the scheduled round name (e.g. 初试) when there is no personal to-do. Return only the round name, not other interviewers’ arrangements or feedback.
+
+Interviewer badge layout clarified 2026-10-19: keep one card-level status badge aligned horizontally with candidate name; remove duplicate task status badges. A single screening task shows 简历待确认, a single feedback task shows the round name, and multiple tasks retain their count. Keep per-task job/round text and action controls.

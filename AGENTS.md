@@ -85,3 +85,5 @@ Reviewer progress clarified 2026-10-19: accepted resume reviewers see whether th
 Interviewer layout restored 2026-10-19: retain the 10:56 deployed layout (599a4b7), without the later workflow summary block. For accepted resume reviewers, replace the generic 面试已安排 card badge with the scheduled round name (e.g. 初试) when there is no personal to-do. Return only the round name, not other interviewers’ arrangements or feedback.
 
 Interviewer badge layout clarified 2026-10-19: keep one card-level status badge aligned horizontally with candidate name; remove duplicate task status badges. A single screening task shows 简历待确认, a single feedback task shows the round name, and multiple tasks retain their count. Keep per-task job/round text and action controls.
+
+MCP status alignment confirmed 2026-10-19: keep raw feedback status codes for compatibility, add feedbackStatusLabel in lists and feedback.statusLabel in details, mapping returned to 待提交. Draft-save replies read actual persisted feedback status and include statusLabel instead of always claiming draft. Preset prompts use these display labels; formal submission remains browser-only and locked.

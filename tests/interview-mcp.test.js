@@ -51,18 +51,22 @@ test('真实 MCP 协议仅注册三个只读工具，分页及详情不泄露他
 
 test('写入工具要求专用权限、本轮有效安排及逐次确认；仅保存草稿，拒绝他人和正式面评',async()=>{
  const state=fixture();state.revision=12;let writes=0,uploads=0;
- const server=createInterviewMcp({user:{...user,canWrite:true},loadState:async()=>state,fileAccess:async()=>({}),saveDraft:async(appId,roundId,body)=>{writes++;assert.equal(body.draft,true);assert.equal(body.revision,12);assert.equal(body.feedback.summary,'已确认内容');assert.equal(body.feedback.conclusion,'待定');return {revision:13};},uploadTranscript:async(appId,roundId,name,buffer)=>{uploads++;assert.equal(buffer.toString(),'完整对话');return {id:'uploaded',name};}});
+ const server=createInterviewMcp({user:{...user,canWrite:true},loadState:async()=>state,fileAccess:async()=>({}),saveDraft:async(appId,roundId,body)=>{writes++;assert.equal(body.draft,true);assert.equal(body.revision,12);assert.equal(body.feedback.summary,'已确认内容');assert.equal(body.feedback.conclusion,'待定');return {revision:13,applications:[{id:appId,rounds:[{id:roundId,feedback:{status:state.applications[0].rounds[0].feedback.status==='returned'?'returned':'draft'}}]}]};},uploadTranscript:async(appId,roundId,name,buffer)=>{uploads++;assert.equal(buffer.toString(),'完整对话');return {id:'uploaded',name};}});
  const client=new Client({name:'write-test',version:'1'}),[ct,st]=InMemoryTransport.createLinkedPair();
  try{
   await server.connect(st);await client.connect(ct);assert.equal((await client.listTools()).tools.length,5);
   const base={applicationId:'a0',roundId:state.applications[0].rounds[0].id,revision:12,summary:'已确认内容',conclusion:'待定'};
   assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:false}})).isError,true);assert.equal(writes,0);
-  const saved=await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}});assert.equal(saved.isError,undefined);assert.equal(writes,1);assert.equal(state.applications[0].status,'进行中');
+  const saved=await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}});assert.equal(saved.isError,undefined);assert.equal(writes,1);assert.equal(state.applications[0].status,'进行中');assert.equal(JSON.parse(saved.content[0].text).status,'draft');
+  state.applications[0].rounds[0].feedback.status='returned';
+  const returned=JSON.parse((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}})).content[0].text);assert.equal(returned.status,'returned');assert.equal(returned.statusLabel,'待提交');assert.equal(writes,2);
+  const list=JSON.parse((await client.callTool({name:'list_my_interviews',arguments:{}})).content[0].text);assert.equal(list.items.find(item=>item.roundId===base.roundId).feedbackStatusLabel,'待提交');
+  const details=JSON.parse((await client.callTool({name:'get_my_interview',arguments:{applicationId:'a0'}})).content[0].text);assert.equal(details.application.rounds[0].feedback.statusLabel,'待提交');
   assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,roundId:state.applications[0].rounds[1].id,confirmed:true}})).isError,true);
   const file={applicationId:'a0',roundId:base.roundId,name:'dialogue.txt',contentBase64:Buffer.from('完整对话').toString('base64'),confirmed:true};
   assert.equal((await client.callTool({name:'upload_my_transcript',arguments:{...file,confirmed:false}})).isError,true);
   assert.equal((await client.callTool({name:'upload_my_transcript',arguments:{...file,contentBase64:'@@@@'}})).isError,true);
   assert.equal((await client.callTool({name:'upload_my_transcript',arguments:file})).isError,undefined);assert.equal(uploads,1);
-  state.applications[0].rounds[0].feedback.status='submitted';assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}})).isError,true);assert.equal(writes,1);
+  state.applications[0].rounds[0].feedback.status='submitted';assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}})).isError,true);assert.equal(writes,2);
  }finally{await client.close();await server.close();}
 });

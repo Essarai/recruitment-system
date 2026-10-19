@@ -10,9 +10,13 @@ import {readState,visibleState} from './database.js';
 import {tokenHash} from './auth.js';
 import {signedResumeAccess} from './files.js';
 
+const feedbackStatusLabel=status=>({none:'待提交',draft:'草稿待提交',returned:'待提交',submitted:'已提交'}[status]||'待提交');
+
 export function myInterviews(state,user){
  if(user.role!=='interviewer')throw Error('仅面试官可以使用个人 MCP');
- return visibleState(state,user,[],state.revision||0);
+ const view=visibleState(state,user,[],state.revision||0);
+ for(const app of view.applications)for(const round of app.rounds)round.feedback={...round.feedback,statusLabel:feedbackStatusLabel(round.feedback.status)};
+ return view;
 }
 export function interviewFile(view,applicationId,kind,roundId){
  const app=view.applications.find(a=>a.id===applicationId);if(!app)throw Error('应聘不存在或无权访问');
@@ -32,7 +36,7 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
   const items=view.applications.flatMap(app=>{
    const candidate=view.candidates.find(c=>c.id===app.candidateId);
    const common={applicationId:app.id,candidateName:candidate?.name,job:app.job,applicationStatus:app.status};
-   return [...(app.screening?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,cancelled:r.cancelled,feedbackStatus:r.feedback.status,hasTranscript:!!r.feedback.transcript}))];
+   return [...(app.screening?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,cancelled:r.cancelled,feedbackStatus:r.feedback.status,feedbackStatusLabel:r.feedback.statusLabel,hasTranscript:!!r.feedback.transcript}))];
   });return {total:items.length,offset,limit,items:items.slice(offset,offset+limit)};
  });
  tool('get_my_interview','按应聘 ID 获取候选人资料、本人面试安排和本人面评（含草稿及对话附件信息）。不返回 HR 备注和其他面试官面评。',{applicationId:schemaId},async({applicationId},view)=>{
@@ -57,7 +61,9 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
    const feedback={summary:args.summary,strengths:args.strengths,concerns:args.concerns,conclusion:args.conclusion};
    if(args.transcriptId)feedback.transcript={id:args.transcriptId};
    const saved=await saveDraft(args.applicationId,args.roundId,{revision:args.revision,draft:true,feedback});
-   return {saved:true,status:'draft',revision:saved.revision,message:'草稿已保存，正式提交请在招聘系统核对完成'};
+   const feedbackStatus=saved.applications.find(app=>app.id===args.applicationId)?.rounds.find(round=>round.id===args.roundId)?.feedback.status;
+   if(!feedbackStatus)throw Error('保存响应缺少面评状态，请读取详情核实保存结果');
+   return {saved:true,status:feedbackStatus,statusLabel:feedbackStatusLabel(feedbackStatus),revision:saved.revision,message:'草稿已保存，正式提交请在招聘系统核对完成；提交后无法自行修改'};
   });
   write('upload_my_transcript','用户确认文件后上传本人本轮完整面试对话（UTF-8 TXT/MD、PDF、DOC/DOCX，20 MB 内）。参数为标准 base64 文件内容，非本地路径。返回文件 ID；随后保存草稿关联该 ID，未关联文件不会出现在面评中。',{
    ...target,name:z.string().min(1).max(240),contentBase64:z.string().min(1).max(Math.ceil(MAX_FILE/3)*4)

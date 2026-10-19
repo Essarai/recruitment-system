@@ -118,3 +118,9 @@ test('排期操作由服务器追加真实操作人和时间，不接受伪造�
  const cancel=visibleState(focused,actor,[],4);cancel.applications[0].rounds[0].cancelled=true;const cancelled=validateHRState(focused,cancel,names,[file],actor.name,names,actor);assert.equal(cancelled.applications[0].rounds[0].scheduleEvents.at(-1).type,'cancelled');
  const own=visibleState(created,{name:'面试官甲',role:'interviewer'},[],1);assert.equal(own.applications[0].rounds[0].scheduleEvents,undefined);
 });
+
+test('我发起的按创建人匹配，管理员不因可管理全部而匹配他人记录',async()=>{
+ const {isApplicationCreator}=await import('../src/permissions.js'),hr={id:'h',name:'HR甲',role:'HR'},admin={id:'a',name:'管理员',role:'admin'};
+ assert.equal(isApplicationCreator(hr,{createdBy:'h'}),true);assert.equal(isApplicationCreator(hr,{createdBy:'other',history:[{action:'创建应聘',actor:'HR甲'}]}),false);
+ assert.equal(isApplicationCreator(admin,{createdBy:'h'}),false);assert.equal(isApplicationCreator(admin,{createdBy:'a'}),true);assert.equal(isApplicationCreator(hr,{history:[{action:'修改应聘',actor:'HR甲'},{action:'创建应聘记录',actor:'HR乙'}]}),false);assert.equal(isApplicationCreator(hr,{history:[{action:'修改应聘',actor:'HR乙'},{action:'创建应聘记录',actor:'HR甲'}]}),true);assert.equal(isApplicationCreator(hr,{history:[]}),false);
+});

@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {interviewGroups} from '../src/interview-groups.js';
+import {visibleState} from '../server/database.js';
 const now=Date.parse('2026-10-18T10:00:00Z');
 const round=(id,person,time,status='none',cancelled=false)=>({id,interviewer:person,time,feedback:{status},cancelled});
 test('同一候选人跨应聘跨轮次合为一条主记录；同名不同 ID 不合并，保留各自附件和轮次',()=>{
@@ -45,4 +46,13 @@ test('即将面试保留至计划时间后 1 小时，到期移出但保留待�
  for(const at of [start+3600000,start+3600001]){const [g]=interviewGroups(data,'甲','',at);assert.equal(g.upcoming.length,0);assert.equal(g.feedback,1);assert.equal(g.roundCount,1);assert.equal(g.applications[0].rounds[0].feedback.status,'none');}
  data.applications[0].rounds[0].feedback.status='submitted';assert.equal(interviewGroups(data,'甲','',start)[0].upcoming.length,0);
  data.applications[0].rounds[0].feedback.status='none';data.applications[0].rounds[0].cancelled=true;assert.equal(interviewGroups(data,'甲','',start)[0].upcoming.length,0);
+});
+
+
+test('确认人可见首轮已排期摘要，但不泄露其他面试官安排或面评',()=>{
+ const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',screening:{status:'accepted',interviewer:'确认人'},rounds:[round('first','其他面试官','2026-10-20T10:00')]}]};
+ const safe=visibleState(data,{name:'确认人',role:'interviewer'},[],1);
+ assert.equal(safe.applications[0].screening.firstInterviewScheduled,true);assert.equal(safe.applications[0].screening.interviewsScheduled,true);assert.deepEqual(safe.applications[0].rounds,[]);
+ const [g]=interviewGroups(safe,'确认人','',now);assert.equal(g.waiting,0);assert.equal(g.tasks.length,0);
+ data.applications[0].rounds[0].cancelled=true;assert.equal(visibleState(data,{name:'确认人',role:'interviewer'},[],1).applications[0].screening.firstInterviewScheduled,false);
 });

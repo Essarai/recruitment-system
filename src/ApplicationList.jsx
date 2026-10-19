@@ -1,12 +1,12 @@
 import {isApplicationCreator} from './permissions';
 import {PaginatedList} from './PaginatedList';
 import React,{useState} from 'react';
-import {applicationStage,applicationProgress,educationOptions,nextInterview,pending,applicationStatus} from './model';
+import {newestApplications,applicationStage,applicationProgress,educationOptions,nextInterview,pending,applicationStatus} from './model';
 export function ApplicationList({data,user,query,open,select,date}){
  const [job,setJob]=useState(''),[status,setStatus]=useState(''),[person,setPerson]=useState(''),[scope,setScope]=useState('');
  const candidateMap=new Map(data.candidates.map(c=>[c.id,c]));
  const candidate=a=>candidateMap.get(a.candidateId);
- const list=data.applications.filter(a=>{const c=candidate(a);return `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(query.toLowerCase())&&(!scope||isApplicationCreator(user,a))&&(!job||a.job===job)&&(!status||applicationStatus(a)===status)&&(!person||a.screening?.interviewer===person||a.rounds.some(r=>r.interviewer===person));});
+ const list=newestApplications(data.applications.filter(a=>{const c=candidate(a);return `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(query.toLowerCase())&&(!scope||isApplicationCreator(user,a))&&(!job||a.job===job)&&(!status||applicationStatus(a)===status)&&(!person||a.screening?.interviewer===person||a.rounds.some(r=>r.interviewer===person));}));
  return <section className="application-list">
   <div className="title-row"><div><h1>应聘列表</h1><p className="muted">先查看详情，再处理简历确认、面试安排和面评</p></div><button className="primary" onClick={()=>open('createApplication')}>创建应聘</button></div>
   <div className="filters"><select aria-label="应聘归属筛选" value={scope} onChange={e=>setScope(e.target.value)}><option value="">全部应聘</option><option value="mine">我发起的</option></select><select aria-label="岗位筛选" value={job} onChange={e=>setJob(e.target.value)}><option value="">全部岗位</option>{[...new Set(data.applications.map(a=>a.job))].map(j=><option key={j}>{j}</option>)}</select><select aria-label="应聘状态筛选" value={status} onChange={e=>setStatus(e.target.value)}><option value="">全部状态</option>{['进行中','已录用','流程终止'].map(s=><option key={s}>{s}</option>)}</select><select aria-label="面试官筛选" value={person} onChange={e=>setPerson(e.target.value)}><option value="">全部面试官</option>{data.users.filter(u=>u.role==='interviewer').map(u=><option key={u.id}>{u.name}</option>)}</select>{(scope||job||status||person)&&<button className="text-button" onClick={()=>{setScope('');setJob('');setStatus('');setPerson('');}}>清除筛选</button>}</div>

@@ -1,6 +1,6 @@
 import {resumeSearchTerms} from '../src/resume-search.js';
 import {isRecruiter} from '../src/permissions.js';
-import {applicationStage,candidateResumes} from '../src/model.js';
+import {newestApplications,applicationStage,candidateResumes} from '../src/model.js';
 import {isDeepStrictEqual} from 'node:util';
 
 export function candidateSummary(c){return Object.fromEntries(['id','name','phone','email','age','education'].map(k=>[k,c[k]??'']).concat([['_summary',true]]));}
@@ -36,11 +36,11 @@ export async function searchResumeLibrary(pool,query={}){
  const {cte,params}=resumeSearchSQL(query.q||''),conn=await pool.getConnection();
  try{await conn.beginTransaction();const [[count]]=await conn.query(cte+' SELECT COUNT(*) AS total,(SELECT JSON_LENGTH(payload,\'$.candidates\') FROM recruitment_state WHERE id=1) AS libraryTotal FROM matched',params);
  const total=Number(count.total),pages=Math.max(1,Math.ceil(total/size)),page=Math.min(requested,pages);
- const [rows]=await conn.query(cte+' SELECT profile,revision FROM matched ORDER BY ord LIMIT ? OFFSET ?',[...params,size,(page-1)*size]);
+ const [rows]=await conn.query(cte+` SELECT profile,revision FROM matched ORDER BY NULLIF(JSON_UNQUOTE(JSON_EXTRACT(profile,'$.createdAt')),'null') DESC,ord ASC LIMIT ? OFFSET ?`,[...params,size,(page-1)*size]);
  const candidates=rows.map(r=>json(r.profile)),ids=candidates.map(c=>c.id);let applications=[];
  if(ids.length){const [apps]=await conn.query(`SELECT j.app FROM recruitment_state s JOIN JSON_TABLE(s.payload,'$.applications[*]' COLUMNS(app JSON PATH '$',candidateId VARCHAR(80) PATH '$.candidateId')) j WHERE s.id=1 AND j.candidateId IN (${ids.map(()=>'?').join(',')})`,ids);applications=apps.map(r=>json(r.app));}
  const [[version]]=await conn.query('SELECT revision FROM recruitment_state WHERE id=1');await conn.commit();
- return {total,libraryTotal:Number(count.libraryTotal),page,pages,size,revision:Number(version.revision),items:candidates.map(candidate=>{const apps=applications.filter(a=>a.candidateId===candidate.id),current=apps.find(a=>a.status==='进行中')||apps[0],{name,tone}=applicationStage(current);return {candidate,applicationCount:apps.length,active:apps.some(a=>a.status==='进行中'),job:current?.job||'',stage:{name,tone},files:candidateResumes(candidate,apps)};})};
+ return {total,libraryTotal:Number(count.libraryTotal),page,pages,size,revision:Number(version.revision),items:candidates.map(candidate=>{const apps=newestApplications(applications.filter(a=>a.candidateId===candidate.id)),current=apps.find(a=>a.status==='进行中')||apps[0],{name,tone}=applicationStage(current);return {candidate,applicationCount:apps.length,active:apps.some(a=>a.status==='进行中'),job:current?.job||'',stage:{name,tone},files:candidateResumes(candidate,apps)};})};
  }catch(e){await conn.rollback();throw e;}finally{conn.release();}
 }
 export function mountResumeLibrary(app,{pool}){

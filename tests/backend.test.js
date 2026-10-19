@@ -131,3 +131,8 @@ test('账号改为 HR 后保留原面试人与流程历史，不能再将其用�
  const changed=structuredClone(view);changed.applications[0].rounds[0].time='2026-10-22T10:00';assert.throws(()=>validateHRState(previous,changed,names,[file],'管理员',names),/不再是面试官/);
  const template=structuredClone(view);template.templates.push({...template.templates[0],id:'new-template'});assert.throws(()=>validateHRState(previous,template,names,[file],'管理员',names),/有效的默认面试官/);
 });
+
+test('应聘按原始创建时间倒序，修改时间不影响，缺失时间置后，同时间保持稳定且不改原数组',async()=>{
+ const {newestApplications}=await import('../src/model.js');const old={id:'old',history:[{action:'修改应聘',at:'2026-10-21T00:00:00Z'},{action:'创建应聘记录',at:'2026-10-01T00:00:00Z'}]},recent={id:'recent',history:[{action:'创建应聘',at:'2026-10-19T00:00:00Z'}]},same={id:'same',history:[{action:'创建应聘',at:'2026-10-19T00:00:00Z'}]},unknown={id:'unknown',history:[{action:'修改',at:'2026-10-22T00:00:00Z'},{action:'创建应聘',at:'invalid'}]};const input=[old,unknown,recent,same],copy=structuredClone(input);assert.deepEqual(newestApplications(input).map(a=>a.id),['recent','same','old','unknown']);assert.deepEqual(input,copy);
+ const duplicate={id:'dup',history:[{action:'创建应聘',at:'2026-10-23T00:00:00Z'},{action:'创建应聘',at:'2026-09-01T00:00:00Z'}]};assert.deepEqual(newestApplications([duplicate,old]).map(a=>a.id),['old','dup']);
+});

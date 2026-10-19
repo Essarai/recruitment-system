@@ -31,9 +31,10 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  unique(candidates,'候选人');preserve(previous.candidates,candidates,'候选人');
  for(const candidate of candidates)if(!oldCandidates.has(candidate.id)&&candidateMatches(candidates,candidate).some(other=>sameCandidateContact(other,candidate)))throw Error('手机号或邮箱已存在，请打开原候选人档案并更新简历');
  const templates=array(input.templates,'流程模板',100).map(t=>{
-  const nodes=templateNodes(array(t.nodes,'流程节点',50),interviewers),old=previous.templates.find(x=>x.id===t.id);
+  const nodes=templateNodes(array(t.nodes,'流程节点',50)),old=previous.templates.find(x=>x.id===t.id);
+  if(nodes.some((n,i)=>n.interviewer&&!interviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('请选择有效的默认面试官');
   if(nodes.some((n,i)=>n.interviewer&&!activeInterviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('不能将已冻结账号设为默认面试官');
-  const reviewer=text(t.reviewer,'默认简历确认人',100);if(reviewer&&(!interviewers.includes(reviewer)||(!activeInterviewers.includes(reviewer)&&old?.reviewer!==reviewer)))throw Error('请选择启用的简历确认人');
+  const reviewer=text(t.reviewer,'默认简历确认人',100);if(reviewer&&old?.reviewer!==reviewer&&(!interviewers.includes(reviewer)||!activeInterviewers.includes(reviewer)))throw Error('请选择启用的简历确认人');
   return {id:id(t.id),name:text(t.name,'流程名称',100,true),jd:text(t.jd,'JD',20000),...(reviewer?{reviewer}:{}),nodes};
  });
  unique(templates,'模板');preserve(previous.templates,templates,'模板');
@@ -63,13 +64,13 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    const result={id:id(r.id),name:text(r.name,'轮次名称',100,true),interviewer:text(r.interviewer,'面试官',100),time:text(r.time,'面试时间',40),mode:text(r.mode,'面试方式',10),location:text(r.location,'会议链接或地点',2000),focus:text(r.focus,'考察重点',2000),cancelled:r.cancelled===true,feedback:oldRound?.feedback||{status:'none',summary:'',strengths:'',concerns:'',conclusion:''}};
    if(roundIds.has(result.id))throw Error('面试节点 ID 不能重复');roundIds.add(result.id);
    if(!['线上','线下'].includes(result.mode))throw Error('请选择面试方式');
-   if(result.interviewer&&!interviewers.includes(result.interviewer))throw Error('面试官账号不存在');
+   if(result.interviewer&&!interviewers.includes(result.interviewer)&&oldRound?.interviewer!==result.interviewer)throw Error('面试官账号不存在');
    if(oldRound&&oldRound.name!==result.name)throw Error('不能改写已有轮次名称');
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
    if(oldRound?.scheduleEvents)result.scheduleEvents=structuredClone(oldRound.scheduleEvents);
    const changed=!oldRound||scheduleKeys.some(k=>oldRound[k]!==result[k])||(oldRound.cancelled&&!result.cancelled);
    if(changed){
-    if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error('不能为已冻结的面试官新增或修改安排');
+    if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error(interviewers.includes(result.interviewer)?'不能为已冻结的面试官新增或修改安排':'该账号已不再是面试官，请重新指定面试官');
     if(old?.status!=='进行中'&&old)throw Error('应聘已结束，不能变更安排');
     if(result.time){validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
     else if(oldRound?.time||result.location||result.focus)throw Error('请完整填写面试安排');

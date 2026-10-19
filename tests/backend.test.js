@@ -124,3 +124,10 @@ test('我发起的按创建人匹配，管理员不因可管理全部而匹配�
  assert.equal(isApplicationCreator(hr,{createdBy:'h'}),true);assert.equal(isApplicationCreator(hr,{createdBy:'other',history:[{action:'创建应聘',actor:'HR甲'}]}),false);
  assert.equal(isApplicationCreator(admin,{createdBy:'h'}),false);assert.equal(isApplicationCreator(admin,{createdBy:'a'}),true);assert.equal(isApplicationCreator(hr,{history:[{action:'修改应聘',actor:'HR甲'},{action:'创建应聘记录',actor:'HR乙'}]}),false);assert.equal(isApplicationCreator(hr,{history:[{action:'修改应聘',actor:'HR乙'},{action:'创建应聘记录',actor:'HR甲'}]}),true);assert.equal(isApplicationCreator(hr,{history:[]}),false);
 });
+
+test('账号改为 HR 后保留原面试人与流程历史，不能再将其用于新增或修改排期',()=>{
+ const previous=state();previous.templates=[{id:'old-template',name:'历史岗位',reviewer:'面试官甲',nodes:[{name:'初试',interviewer:'面试官甲'}]}];const names=['面试官乙'],view=visibleState(previous,{role:'admin'},[],1);
+ const saved=validateHRState(previous,view,names,[file],'管理员',names);assert.equal(saved.templates[0].reviewer,'面试官甲');assert.equal(saved.templates[0].nodes[0].interviewer,'面试官甲');assert.equal(saved.applications[0].rounds[0].interviewer,'面试官甲');assert.equal(saved.applications[0].rounds[0].feedback.summary,'草稿内容');
+ const changed=structuredClone(view);changed.applications[0].rounds[0].time='2026-10-22T10:00';assert.throws(()=>validateHRState(previous,changed,names,[file],'管理员',names),/不再是面试官/);
+ const template=structuredClone(view);template.templates.push({...template.templates[0],id:'new-template'});assert.throws(()=>validateHRState(previous,template,names,[file],'管理员',names),/有效的默认面试官/);
+});

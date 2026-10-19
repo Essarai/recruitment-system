@@ -59,3 +59,5 @@ export async function loadCandidate(id){
  if(!baseline||result.revision!==baseline.revision)throw Object.assign(Error('数据已更新，请刷新页面后重试'),{status:409});
  const candidates=baseline.candidates.filter(c=>c.id!==id);candidates.push(result.candidate);baseline={...baseline,candidates};return structuredClone(baseline);
 }
+
+export const setAccountRole=(id,role)=>request('/users/'+encodeURIComponent(id)+'/role',{method:'PATCH',body:JSON.stringify({role})});

@@ -82,6 +82,4 @@ Feedback helper display clarified 2026-10-19: do not show return reasons in HR r
 
 Reviewer progress clarified 2026-10-19: accepted resume reviewers see whether the first interview is scheduled and a scheduled badge in full candidate records, using booleans only. Do not expose other interviewers’ arrangements or feedback. Resume-review helper states rejection immediately ends the application.
 
-Interviewer flow visibility clarified 2026-10-19: show job, current workflow round and stage summary directly on each candidate card before collapsed records. Derive the safe name/detail/tone summary from the full application on the server before filtering other interviewers’ rounds; never send full other-round objects or private final reasons in this summary. This also covers resume reviewers who conduct no scheduled round.
-
-Interviewer stage display simplified 2026-10-19: the candidate card’s workflow summary shows only the stage name, e.g. 初试, without job, 当前流程 prefix or stage detail. Keep detailed records unchanged.
+Interviewer layout restored 2026-10-19: retain the 10:56 deployed layout (599a4b7), without the later workflow summary block. For accepted resume reviewers, replace the generic 面试已安排 card badge with the scheduled round name (e.g. 初试) when there is no personal to-do. Return only the round name, not other interviewers’ arrangements or feedback.

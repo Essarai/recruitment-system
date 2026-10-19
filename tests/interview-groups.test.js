@@ -50,18 +50,9 @@ test('即将面试保留至计划时间后 1 小时，到期移出但保留待�
 
 
 test('确认人可见首轮已排期摘要，但不泄露其他面试官安排或面评',()=>{
- const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',screening:{status:'accepted',interviewer:'确认人'},rounds:[round('first','其他面试官','2026-10-20T10:00')]}]};
+ const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',screening:{status:'accepted',interviewer:'确认人'},rounds:[{...round('first','其他面试官','2026-10-20T10:00'),name:'初试'}]}]};
  const safe=visibleState(data,{name:'确认人',role:'interviewer'},[],1);
- assert.equal(safe.applications[0].screening.firstInterviewScheduled,true);assert.equal(safe.applications[0].screening.interviewsScheduled,true);assert.deepEqual(safe.applications[0].rounds,[]);
+ assert.equal(safe.applications[0].screening.scheduledRoundName,'初试');assert.equal(safe.applications[0].screening.firstInterviewScheduled,true);assert.equal(safe.applications[0].screening.interviewsScheduled,true);assert.deepEqual(safe.applications[0].rounds,[]);
  const [g]=interviewGroups(safe,'确认人','',now);assert.equal(g.waiting,0);assert.equal(g.tasks.length,0);
  data.applications[0].rounds[0].cancelled=true;assert.equal(visibleState(data,{name:'确认人',role:'interviewer'},[],1).applications[0].screening.firstInterviewScheduled,false);
-});
-
-
-test('确认人得到完整流程的安全阶段摘要，不因过滤他人轮次而只显示简历确认',()=>{
- const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',screening:{status:'accepted',interviewer:'确认人'},rounds:[{...round('first','其他面试官','2099-10-20T10:00'),name:'一面',feedback:{status:'none',summary:'私有评价'}}]}]};
- const safe=visibleState(data,{name:'确认人',role:'interviewer'},[],1),app=safe.applications[0];
- assert.equal(app.progress.name,'一面');assert.match(app.progress.detail,/待面试/);assert.deepEqual(Object.keys(app.progress).sort(),['detail','name','tone']);assert.deepEqual(app.rounds,[]);assert.ok(!JSON.stringify(app).includes('私有评价'));
- data.applications[0].status='未录用';data.applications[0].reason='HR 私有原因';data.applications[0].rounds.push({...round('own','确认人','2099-10-20T10:00'),name:'二面'});
- const ended=visibleState(data,{name:'确认人',role:'interviewer'},[],1).applications[0];assert.equal(ended.progress.name,'流程终止');assert.ok(!JSON.stringify(ended).includes('HR 私有原因'));
 });

@@ -95,3 +95,18 @@ test('重新捞起的可选简历合并候选人更新版本及全部应聘，�
  const candidate={id:'c',resumes:[{id:'new',name:'new.pdf',uploadedAt:'2026-10-18T00:00:00Z'}]},apps=[{candidateId:'c',resume:{id:'old',name:'old.pdf'},history:[{at:'2026-10-17T00:00:00Z',action:'创建应聘'}]},{candidateId:'c',resume:{id:'old',name:'old.pdf'},history:[]},{candidateId:'other',resume:{id:'private'},history:[]}];
  assert.deepEqual(candidateResumes(candidate,apps).map(f=>f.id),['new','old']);assert.equal(apps[0].resume.uploadedAt,undefined);assert.deepEqual(candidateResumes(undefined,apps),[]);
 });
+
+
+test('待定可正式提交，保留应聘和后续安排，进度显示待定颜色且正式面评保持锁定',async()=>{
+ const {terminateFailedApplication,roundTone,applicationProgress}=await import('../src/model.js');
+ const app=seed().applications[0],r=app.rounds[0],f={summary:'关键能力尚需验证，交由 HR 协调后续',conclusion:'待定'};
+ const before=structuredClone(app.rounds.slice(1));
+ assert.throws(()=>submitFeedback(app,r,'陈晨',f,false));
+ assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,summary:' '},true));
+ r.feedback=submitFeedback(app,r,'陈晨',f,true);
+ assert.equal(r.feedback.status,'submitted');assert.equal(r.feedback.conclusion,'待定');
+ assert.equal(terminateFailedApplication(app,'陈晨'),false);assert.equal(app.status,'进行中');
+ assert.deepEqual(app.rounds.slice(1),before);assert.equal(roundTone(r),'pending');
+ const step=applicationProgress(app).find(s=>s.id===r.id);assert.equal(step.done,true);assert.equal(step.tone,'pending');
+ assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,conclusion:'建议通过'},true),/锁定/);
+});

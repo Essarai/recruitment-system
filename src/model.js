@@ -40,7 +40,7 @@ export function validateSchedule(app,r,data,people=null){
 export function submitFeedback(app,r,person,data,completed){
  if(r.cancelled||!r.time||r.interviewer!==person) throw Error('仅本轮面试官可以提交有效安排的面评');
  if(r.feedback.status==='submitted') throw Error('面评已锁定，需 HR 退回后修改');
- if(!completed||!data.summary.trim()||!['建议通过','建议不通过','建议加面'].includes(data.conclusion)) throw Error('请填写综合评价、建议结论，并确认面试已完成');
+ if(!completed||!data.summary.trim()||!['建议通过','建议不通过','建议加面','待定'].includes(data.conclusion)) throw Error('请填写综合评价、建议结论，并确认面试已完成');
  return {...data,status:'submitted',submittedAt:new Date().toISOString(),author:person,returnReason:r.feedback.returnReason||''};
 }
 export function endApplication(app,status,reason){
@@ -62,7 +62,7 @@ export function applicationStage(app,now=Date.now()){
 
 export function roundTone(round,now=Date.now()){
  if(round.cancelled)return 'neutral';
- if(round.feedback.status==='submitted')return round.feedback.conclusion==='建议不通过'?'danger':'success';
+ if(round.feedback.status==='submitted')return round.feedback.conclusion==='建议不通过'?'danger':round.feedback.conclusion==='待定'?'pending':'success';
  if(round.feedback.status==='returned')return 'danger';
  if(!round.time)return 'pending';
  return new Date(round.time).getTime()<=now?'feedback':'interview';

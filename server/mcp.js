@@ -52,7 +52,7 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
   });
   const target={applicationId:schemaId,roundId:schemaId,confirmed:z.boolean().describe('仅在用户已确认本次目标和内容后设为 true')};
   write('save_my_feedback_draft','用户确认后保存本人面评草稿。不会正式提交或终止流程。先 get_my_interview 获取最新 revision；冲突后重新读取并请用户核对，勿覆盖新修改。',{
-   ...target,revision:z.number().int().nonnegative(),summary:z.string().max(10000),strengths:z.string().max(5000).default(''),concerns:z.string().max(5000).default(''),conclusion:z.enum(['','建议通过','建议不通过','建议加面']),transcriptId:schemaId.optional()
+   ...target,revision:z.number().int().nonnegative(),summary:z.string().max(10000),strengths:z.string().max(5000).default(''),concerns:z.string().max(5000).default(''),conclusion:z.enum(['','建议通过','建议不通过','建议加面','待定']),transcriptId:schemaId.optional()
   },async args=>{
    const feedback={summary:args.summary,strengths:args.strengths,concerns:args.concerns,conclusion:args.conclusion};
    if(args.transcriptId)feedback.transcript={id:args.transcriptId};

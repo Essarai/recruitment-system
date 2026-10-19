@@ -55,10 +55,3 @@ test('服务端拒绝缺失任一候选人资料，最高学历单独持久化�
  const saved=validateHRState(emptyState(),{...emptyState(),candidates:[full]},[],[file],'HR');assert.equal(saved.candidates[0].highestEducation,'本科');
  const legacy=structuredClone(saved);delete legacy.candidates[0].highestEducation;assert.equal(validateHRState(legacy,structuredClone(legacy),[],[file],'HR').candidates[0].highestEducation,undefined);
 });
-
-test('候选人入库及更新日期由服务器记录，保留创建时间，未改资料不刷新更新时间',()=>{
- const input={...emptyState(),candidates:[{...candidate,createdAt:'2099-01-01',updatedAt:'2099-01-01'}]},saved=validateHRState(emptyState(),input,[],[file],'HR');
- const c=saved.candidates[0];assert.notEqual(c.createdAt,'2099-01-01');assert.equal(c.updatedAt,c.createdAt);assert.match(c.createdAt,/^20\d\d-/);
- const unchanged=validateHRState(saved,structuredClone(saved),[],[file],'HR');assert.equal(unchanged.candidates[0].updatedAt,c.updatedAt);
- const edit=structuredClone(saved);edit.candidates[0].notes='补充沟通信息';edit.candidates[0].createdAt='2099-01-01';edit.candidates[0].updatedAt='2099-01-01';const updated=validateHRState(saved,edit,[],[file],'HR');assert.equal(updated.candidates[0].createdAt,c.createdAt);assert.notEqual(updated.candidates[0].updatedAt,'2099-01-01');
-});

@@ -23,6 +23,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
     return {id:file.id,name:file.name,type:file.mime,size:file.size,uploadedAt:oldResumes?.find(f=>f.id===file.id)?.uploadedAt||now};
    });
   }
+  if(old?.createdBy)result.createdBy=old.createdBy;else if(!old&&actorUser)result.createdBy=actorUser.id;
+  if(old?.createdAt)result.createdAt=old.createdAt;else if(!old)result.createdAt=now;
   return result;
  });
  unique(candidates,'候选人');preserve(previous.candidates,candidates,'候选人');
@@ -63,6 +65,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(result.interviewer&&!interviewers.includes(result.interviewer))throw Error('面试官账号不存在');
    if(oldRound&&oldRound.name!==result.name)throw Error('不能改写已有轮次名称');
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
+   if(oldRound?.scheduleEvents)result.scheduleEvents=structuredClone(oldRound.scheduleEvents);
    const changed=!oldRound||scheduleKeys.some(k=>oldRound[k]!==result[k])||(oldRound.cancelled&&!result.cancelled);
    if(changed){
     if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error('不能为已冻结的面试官新增或修改安排');
@@ -79,6 +82,10 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
     result.feedbackVersions=[...(oldRound.feedbackVersions||[]),structuredClone(oldRound.feedback)];
     result.feedback={...oldRound.feedback,status:'returned',returnReason:reason};
    }else if(oldRound?.feedback.status==='submitted'&&!equal(r.feedback,oldRound.feedback))throw Error('不能改写面试官的正式面评');
+   if(actorUser){
+    const type=result.cancelled&&!oldRound?.cancelled&&next.status==='进行中'?'cancelled':!result.cancelled&&result.time&&(!oldRound?.time||oldRound.cancelled)?'created':!result.cancelled&&result.time&&['interviewer','time','mode','location'].some(key=>oldRound?.[key]!==result[key])?'rescheduled':null;
+    if(type)result.scheduleEvents=[...(result.scheduleEvents||[]),{type,at:now,actorId:actorUser.id,actorName:actorUser.name}];
+   }
    return result;
   });
   if(!next.rounds.length)throw Error('至少保留一个面试节点');

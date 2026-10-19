@@ -55,3 +55,9 @@ test('服务端拒绝缺失任一候选人资料，最高学历单独持久化�
  const saved=validateHRState(emptyState(),{...emptyState(),candidates:[full]},[],[file],'HR');assert.equal(saved.candidates[0].highestEducation,'本科');
  const legacy=structuredClone(saved);delete legacy.candidates[0].highestEducation;assert.equal(validateHRState(legacy,structuredClone(legacy),[],[file],'HR').candidates[0].highestEducation,undefined);
 });
+
+test('候选人入库人和时间只取认证信息，编辑不覆盖，面试官不接收 HR 归属字段',()=>{
+ const actor={id:'hr-id',name:'HR甲',role:'HR'},input={...emptyState(),candidates:[{...candidate,createdBy:'forged',createdAt:'2099-01-01'}]};const saved=validateHRState(emptyState(),input,[],[file],actor.name,[],actor);const c=saved.candidates[0];assert.equal(c.createdBy,actor.id);assert.notEqual(c.createdAt,'2099-01-01');
+ const edit=structuredClone(saved);edit.candidates[0].notes='更新备注';edit.candidates[0].createdBy='someone-else';edit.candidates[0].createdAt='2099-01-01';const updated=validateHRState(saved,edit,[],[file],actor.name,[],actor);assert.equal(updated.candidates[0].createdBy,c.createdBy);assert.equal(updated.candidates[0].createdAt,c.createdAt);
+ updated.applications=[{id:'a',candidateId:c.id,status:'进行中',screening:{status:'pending',interviewer:'面试官'},rounds:[]}];const safe=visibleState(updated,{role:'interviewer',name:'面试官'},[],1);assert.equal(safe.candidates[0].createdBy,undefined);assert.equal(safe.candidates[0].createdAt,undefined);
+});

@@ -107,3 +107,14 @@ test('历史应聘按最早创建日志识别所有者；新应聘创建者只�
  const input=structuredClone(previous);input.applications=[{id:'new',createdBy:'forged',candidateId:'candidate1',templateId:'t',job:'岗位',status:'进行中',resume:{id:file.id},screening:{status:'skipped',interviewer:''},rounds:[round('初试')]}];
  const saved=validateHRState(previous,input,[],[file],hr.name,[],hr);assert.equal(saved.applications[0].createdBy,hr.id);
 });
+
+test('排期操作由服务器追加真实操作人和时间，不接受伪造日志，管理员代排不改应聘归属',()=>{
+ const previous=state(),actor={id:'admin-id',name:'管理员',role:'admin'},names=['面试官甲','面试官乙'];previous.applications[0].createdBy='hr-owner';previous.applications[0].screening={status:'skipped',interviewer:'',reason:''};
+ Object.assign(previous.applications[0].rounds[0],{time:'',location:'',focus:'',feedback:{status:'none'}});
+ const input=visibleState(previous,actor,[],1);Object.assign(input.applications[0].rounds[0],{time:'2026-10-21T10:00',location:'https://example.com/meeting',scheduleEvents:[{type:'created',at:'2099-01-01',actorId:'forged'}]});
+ const created=validateHRState(previous,input,names,[file],actor.name,names,actor),r=created.applications[0].rounds[0];assert.equal(created.applications[0].createdBy,'hr-owner');assert.equal(r.scheduleEvents.length,1);assert.equal(r.scheduleEvents[0].type,'created');assert.equal(r.scheduleEvents[0].actorId,actor.id);assert.notEqual(r.scheduleEvents[0].at,'2099-01-01');
+ const edit=visibleState(created,actor,[],2);edit.applications[0].rounds[0].time='2026-10-22T10:00';edit.applications[0].rounds[0].scheduleEvents=[];const changed=validateHRState(created,edit,names,[file],actor.name,names,actor);assert.deepEqual(changed.applications[0].rounds[0].scheduleEvents.map(e=>e.type),['created','rescheduled']);
+ const focus=visibleState(changed,actor,[],3);focus.applications[0].rounds[0].focus='补充重点';const focused=validateHRState(changed,focus,names,[file],actor.name,names,actor);assert.equal(focused.applications[0].rounds[0].scheduleEvents.length,2);
+ const cancel=visibleState(focused,actor,[],4);cancel.applications[0].rounds[0].cancelled=true;const cancelled=validateHRState(focused,cancel,names,[file],actor.name,names,actor);assert.equal(cancelled.applications[0].rounds[0].scheduleEvents.at(-1).type,'cancelled');
+ const own=visibleState(created,{name:'面试官甲',role:'interviewer'},[],1);assert.equal(own.applications[0].rounds[0].scheduleEvents,undefined);
+});

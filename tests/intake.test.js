@@ -34,3 +34,17 @@ test('简历确认人可与一面默认面试官不同，不修改各轮分配',
  const state=data();state.users.push({role:'interviewer',name:'独立确认人'});state.templates[0].reviewer='独立确认人';
  const app=applicationFromCandidate(state,{...selected,reviewer:'独立确认人'},'HR');assert.equal(app.screening.interviewer,'独立确认人');assert.equal(app.rounds[0].interviewer,'面试官');
 });
+test('创建时确认人可留空，无面试官账号也可建应聘；跳过节点后可直接排期',async()=>{
+ const {validateSchedule,applicationProgress,needsScreening,applicationStage}=await import('../src/model.js');
+ const state=data();state.users=[];state.templates[0].reviewer='面试官';
+ const app=applicationFromCandidate(state,{...selected,reviewer:''},'HR');assert.deepEqual(app.screening,{status:'skipped',interviewer:'',reason:''});assert.equal(needsScreening(app),false);
+ assert.ok(!applicationProgress(app).some(step=>step.id==='screening'));assert.equal(applicationStage(app).name,'初试');
+ const previous=validateHRState(emptyState(),state,['面试官'],[file],'HR'),input=structuredClone(previous);input.applications.push(app);
+ const saved=validateHRState(previous,input,['面试官'],[file],'HR');assert.equal(saved.applications[0].screening.status,'skipped');
+ const scheduled=structuredClone(saved);Object.assign(scheduled.applications[0].rounds[0],{interviewer:'面试官',time:'2026-10-22T10:00',location:'https://meeting.example.com/'});
+ assert.doesNotThrow(()=>validateSchedule(app,app.rounds[0],scheduled.applications[0].rounds[0]));assert.equal(validateHRState(saved,scheduled,['面试官'],[file],'HR').applications[0].rounds[0].interviewer,'面试官');
+ assert.equal(visibleState(saved,{role:'interviewer',name:'面试官'},[],1).applications.length,0);
+ const pending=structuredClone(saved);pending.applications[0].screening={status:'pending',interviewer:'面试官',reason:''};const withReview=validateHRState(saved,pending,['面试官'],[file],'HR');
+ const bypass=structuredClone(withReview);bypass.applications[0].screening={status:'skipped',interviewer:'',reason:''};assert.throws(()=>validateHRState(withReview,bypass,['面试官'],[file],'HR'),/不能代为接受/);
+ delete bypass.applications[0].screening;assert.throws(()=>validateHRState(withReview,bypass,['面试官'],[file],'HR'));
+});

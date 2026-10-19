@@ -78,7 +78,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   const compare=x=>{const {history,...record}=x;return JSON.parse(JSON.stringify(record));};
   if(!old||!equal(compare(old),compare(next))){
    const changes=old?next.rounds.flatMap(r=>{const before=old.rounds.find(x=>x.id===r.id);if(!before)return [`新增 ${r.name}`];const fields=[...scheduleKeys,'cancelled'];const updates=fields.filter(k=>before[k]!==r[k]).map(k=>`${k}: ${before[k]||'空'} → ${r[k]||'空'}`);if(r.feedback.status!==before.feedback.status)updates.push(`面评: ${before.feedback.status} → ${r.feedback.status}${r.feedback.returnReason?'；'+r.feedback.returnReason:''}`);return updates.length?[`${r.name}（${updates.join('；')}）`]:[];}):[];
-   next.history=[{at:now,actor,action:!old?'创建应聘':old.status!==next.status?`结束应聘：${next.status}；${next.reason}`:(!equal(old?.screening,next.screening)?`推送简历给 ${next.screening?.interviewer||'待指定'}`:changes.join('；'))||'更新应聘记录'},...next.history];
+   next.history=[{at:now,actor,action:!old?(next.screening?.status==='skipped'?'创建应聘（无需简历确认）':'创建应聘'):old.status!==next.status?`结束应聘：${next.status}；${next.reason}`:(!equal(old?.screening,next.screening)?`推送简历给 ${next.screening?.interviewer||'待指定'}`:changes.join('；'))||'更新应聘记录'},...next.history];
   }
   if(old?.status==='进行中'&&['未录用','候选人退出'].includes(next.status))stopFutureRounds(next,now);
   terminateFailedApplication(next,actor);

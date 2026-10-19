@@ -7,6 +7,7 @@ export function normalizeScreening(previous,input,interviewers,actor){
  if(old&&equal(old,value))return structuredClone(old);
  // Legacy records gain screening data only when HR explicitly pushes a resume.
  if(!old&&!value&&previous)return undefined;
+ if(!previous&&value?.status==='skipped'&&value.interviewer==='')return {status:'skipped',interviewer:'',reason:''};
  if(!old&&!value)return {status:'unassigned',interviewer:'',reason:''};
  if(!old&&value?.status==='unassigned'&&!value.interviewer)return {status:'unassigned',interviewer:'',reason:''};
  if(previous?.status&&previous.status!=='进行中')throw Error('应聘已结束，不能推送简历');

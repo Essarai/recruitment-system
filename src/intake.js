@@ -12,6 +12,6 @@ export function applicationFromCandidate(data,{candidateId,templateId,resumeId,r
  candidateDetails(candidate,true);
  const template=data.templates.find(t=>t.id===templateId);if(!template)throw Error('请选择招聘流程');
  const resume=candidateResumes(candidate,data.applications).find(r=>r.id===resumeId);if(!resume)throw Error('请选择该候选人的已有简历，缺少附件时请先更新简历');
- if(!data.users.some(u=>u.role==='interviewer'&&!u.frozen&&u.name===reviewer))throw Error('请选择简历确认人');
- return {id:uid(),candidateId,templateId:template.id,job:template.name,jd:template.jd||'',status:'进行中',rounds:roundsFromTemplate(template),resume:structuredClone(resume),screening:{status:'pending',interviewer:reviewer,reason:''},history:[{at:new Date().toISOString(),actor,action:'创建应聘记录'}]};
+ if(reviewer&&!data.users.some(u=>u.role==='interviewer'&&!u.frozen&&u.name===reviewer))throw Error('请选择简历确认人');
+ return {id:uid(),candidateId,templateId:template.id,job:template.name,jd:template.jd||'',status:'进行中',rounds:roundsFromTemplate(template),resume:structuredClone(resume),screening:reviewer?{status:'pending',interviewer:reviewer,reason:''}:{status:'skipped',interviewer:'',reason:''},history:[{at:new Date().toISOString(),actor,action:'创建应聘记录'}]};
 }

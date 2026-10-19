@@ -68,7 +68,7 @@ export function roundTone(round,now=Date.now()){
  return new Date(round.time).getTime()<=now?'feedback':'interview';
 }
 
-export const needsScreening=app=>!!app.screening||!app.rounds[0]?.time;
+export const needsScreening=app=>app.screening?.status!=='skipped'&&(!!app.screening||!app.rounds[0]?.time);
 export function validateResumeConfirmation(app){
  if(!needsScreening(app))return;
  if(app.screening?.status!=='accepted')throw Error('请先完成独立的简历确认，再安排面试');
@@ -95,7 +95,7 @@ export function applicationProgress(app,now=Date.now()){
  const stage=applicationStage(app,now),ended=app.status!=='进行中';
  const screened=app.screening?.status==='accepted'||!!app.rounds[0]?.time;
  return [
-  {id:'screening',name:'简历确认',done:screened,active:!ended&&!screened,tone:stage.tone},
+  ...(app.screening?.status==='skipped'?[]:[{id:'screening',name:'简历确认',done:screened,active:!ended&&!screened,tone:stage.tone}]),
   ...app.rounds.map(r=>({id:r.id,name:r.name,done:r.feedback.status==='submitted',active:!ended&&r.feedback.status!=='submitted'&&(stage.round?.id===r.id||!!r.time&&!r.cancelled),tone:roundTone(r,now)})),
   {id:'result',name:'结果',done:ended,active:!ended&&app.rounds.every(r=>r.feedback.status==='submitted'),tone:stage.tone}
  ];

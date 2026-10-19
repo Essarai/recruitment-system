@@ -36,3 +36,13 @@ test('独立确认人在其他人开始面试后仍可查看确认记录，不�
  const [review]=interviewGroups(data,'确认人','',now);assert.equal(review.applications[0].screening,true);assert.equal(review.tasks.length,0);assert.equal(review.waiting,0);assert.equal(review.roundCount,0);
  const [first]=interviewGroups(data,'一面面试官','',now);assert.equal(first.applications[0].screening,false);assert.equal(first.roundCount,1);
 });
+
+
+test('即将面试保留至计划时间后 1 小时，到期移出但保留待交面评和完整记录',()=>{
+ const start=Date.parse('2026-10-19T10:00:00Z');
+ const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',rounds:[round('r','甲',new Date(start).toISOString())]}]};
+ for(const at of [start-1,start,start+3600000-1])assert.equal(interviewGroups(data,'甲','',at)[0].upcoming.length,1);
+ for(const at of [start+3600000,start+3600001]){const [g]=interviewGroups(data,'甲','',at);assert.equal(g.upcoming.length,0);assert.equal(g.feedback,1);assert.equal(g.roundCount,1);assert.equal(g.applications[0].rounds[0].feedback.status,'none');}
+ data.applications[0].rounds[0].feedback.status='submitted';assert.equal(interviewGroups(data,'甲','',start)[0].upcoming.length,0);
+ data.applications[0].rounds[0].feedback.status='none';data.applications[0].rounds[0].cancelled=true;assert.equal(interviewGroups(data,'甲','',start)[0].upcoming.length,0);
+});

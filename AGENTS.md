@@ -75,3 +75,5 @@ Interview conclusion clarified 2026-10-19: add 待定 to formal feedback and MCP
 Returned feedback display clarified 2026-10-19: show 待提交 rather than 面评需修改/待修改 in interviewer tasks, round badges and HR progress. Use the normal feedback color and 继续填写 action; retain internal returned status, original content, return reasons, preserved versions and submit locking.
 
 Feedback saves clarified 2026-10-19: browser feedback editing supplies explicit application/round IDs to save only the current feedback, overwriting its editable draft without detecting targets via aggregate JSON differences. Preserve server ownership, revision conflict and submitted-lock validation. Formal submission requires explicit confirmation that submitted feedback cannot be edited; draft saves do not prompt.
+
+Upcoming visibility clarified 2026-10-19: keep valid ongoing unsubmitted appointments in 即将面试 until their scheduled time plus one hour; then hide only from that view, retaining feedback tasks and full history. Recompute the time filter every 10 seconds even without data changes. Elapsed time never marks feedback submitted or interview completed.

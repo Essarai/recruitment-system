@@ -1,7 +1,7 @@
 import {candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {normalizeScreening} from './screening.js';
 import {isDeepStrictEqual as equal} from 'node:util';
-import {candidateDetails,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,validateFirstSchedule,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
+import {candidateDetails,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
 export function text(value,label,max=1000,required=false){if(value==null)value='';if(typeof value!=='string'||value.length>max||(required&&!value.trim()))throw Error(`${label}无效`);return value.trim();}
 function array(value,label,max=5000){if(!Array.isArray(value)||value.length>max)throw Error(`${label}无效`);return value;}
 function id(value){return text(value,'记录 ID',80,true);}
@@ -29,7 +29,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  const templates=array(input.templates,'流程模板',100).map(t=>{
   const nodes=templateNodes(array(t.nodes,'流程节点',50),interviewers),old=previous.templates.find(x=>x.id===t.id);
   if(nodes.some((n,i)=>n.interviewer&&!activeInterviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('不能将已冻结账号设为默认面试官');
-  return {id:id(t.id),name:text(t.name,'流程名称',100,true),jd:text(t.jd,'JD',20000),nodes};
+  const reviewer=text(t.reviewer,'默认简历确认人',100);if(reviewer&&(!interviewers.includes(reviewer)||(!activeInterviewers.includes(reviewer)&&old?.reviewer!==reviewer)))throw Error('请选择启用的简历确认人');
+  return {id:id(t.id),name:text(t.name,'流程名称',100,true),jd:text(t.jd,'JD',20000),...(reviewer?{reviewer}:{}),nodes};
  });
  unique(templates,'模板');preserve(previous.templates,templates,'模板');
  const roundIds=new Set();const newApplicants=new Set();
@@ -58,7 +59,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(changed){
     if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error('不能为已冻结的面试官新增或修改安排');
     if(old?.status!=='进行中'&&old)throw Error('应聘已结束，不能变更安排');
-    if(result.time){if(index===0)validateFirstSchedule({...next,rounds:old?.rounds||[result]},result);validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
+    if(result.time){validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
     else if(oldRound?.time||result.location||result.focus)throw Error('请完整填写面试安排');
    }
    if(result.cancelled&&!oldRound)throw Error('新节点不能直接取消');

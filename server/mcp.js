@@ -32,7 +32,7 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
   const items=view.applications.flatMap(app=>{
    const candidate=view.candidates.find(c=>c.id===app.candidateId);
    const common={applicationId:app.id,candidateName:candidate?.name,job:app.job,applicationStatus:app.status};
-   return [...(app.screening&&app.rounds.length===0?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,cancelled:r.cancelled,feedbackStatus:r.feedback.status,hasTranscript:!!r.feedback.transcript}))];
+   return [...(app.screening?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,cancelled:r.cancelled,feedbackStatus:r.feedback.status,hasTranscript:!!r.feedback.transcript}))];
   });return {total:items.length,offset,limit,items:items.slice(offset,offset+limit)};
  });
  tool('get_my_interview','按应聘 ID 获取候选人资料、本人面试安排和本人面评（含草稿及对话附件信息）。不返回 HR 备注和其他面试官面评。',{applicationId:schemaId},async({applicationId},view)=>{

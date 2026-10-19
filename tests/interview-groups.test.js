@@ -31,3 +31,8 @@ test('待办有明确应聘/轮次目标，草稿无需等到排期结束；未�
  ]};
  const [g]=interviewGroups(data,'甲','',now);assert.equal(g.tasks.length,3);assert.deepEqual(g.tasks.map(t=>[t.kind,t.app.id,t.round?.id]),[['screening','review',undefined],['feedback','scheduled','due'],['feedback','scheduled','draft']]);assert.deepEqual(g.upcoming.map(t=>t.round.id),['draft','future']);assert.equal(g.reviews,1);assert.equal(g.feedback,2);assert.equal(g.waiting,1);
 });
+test('独立确认人在其他人开始面试后仍可查看确认记录，不产生重复待办',()=>{
+ const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',screening:{interviewer:'确认人',status:'accepted'},rounds:[round('first','一面面试官','2026-10-21')]}]};
+ const [review]=interviewGroups(data,'确认人','',now);assert.equal(review.applications[0].screening,true);assert.equal(review.tasks.length,0);assert.equal(review.waiting,0);assert.equal(review.roundCount,0);
+ const [first]=interviewGroups(data,'一面面试官','',now);assert.equal(first.applications[0].screening,false);assert.equal(first.roundCount,1);
+});

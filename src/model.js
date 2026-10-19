@@ -30,7 +30,7 @@ export const roundsFromTemplate = template => templateNodes(template.nodes).map(
 export const pending = app => app.rounds.filter(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted').length;
 export const nextInterview = app => app.status!=='进行中'?null:app.rounds.filter(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted'&&new Date(r.time)>new Date()).sort((a,b)=>a.time.localeCompare(b.time))[0];
 export function validateSchedule(app,r,data,people=null){
- if(r.id===app.rounds[0]?.id)validateFirstSchedule(app,data);
+ validateResumeConfirmation(app);
  if(app.status!=='进行中') throw Error('应聘已结束，不能新增或修改安排');
  if(r.feedback.status==='submitted') throw Error('已有正式面评的安排不可修改，请增加一轮面试');
  if(!data.interviewer||(people&&!people.includes(data.interviewer))||!data.time||!Number.isFinite(new Date(data.time).getTime())||!data.location.trim()) throw Error('请填写面试官、有效时间及地点或会议链接');
@@ -52,7 +52,7 @@ export function endApplication(app,status,reason){
 export function applicationStage(app,now=Date.now()){
  if(!app)return {name:'未创建应聘',detail:'可创建新的应聘记录',tone:'neutral'};
  if(app.status!=='进行中')return {name:applicationStatus(app),detail:app.reason||'应聘已结束',tone:app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
- if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='accepted'?'面试官已接受，可协调时间':s?.status==='pending'?`${s.interviewer} · 等待接受`:s?.status==='declined'?s.reason:'先指定业务面试官查看简历'};}
+ if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='accepted'?'简历确认已通过，可安排面试':s?.status==='pending'?`${s.interviewer} · 等待确认`:s?.status==='declined'?s.reason:'先指定简历确认人'};}
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
  const round=app.rounds[index];
@@ -69,14 +69,13 @@ export function roundTone(round,now=Date.now()){
 }
 
 export const needsScreening=app=>!!app.screening||!app.rounds[0]?.time;
-export function validateFirstSchedule(app,data){
+export function validateResumeConfirmation(app){
  if(!needsScreening(app))return;
- if(app.screening?.status!=='accepted')throw Error('请先推送简历，由业务面试官接受后再安排首轮面试');
- if(data.interviewer!==app.screening.interviewer)throw Error('首轮须安排给已接受简历的面试官');
+ if(app.screening?.status!=='accepted')throw Error('请先完成独立的简历确认，再安排面试');
 }
 export function reviewResume(app,person,decision,reason=''){
  if(app.status!=='进行中'||app.screening?.status!=='pending'||app.screening.interviewer!==person)throw Error('该简历不在你的待确认列表中，请刷新后重试');
- if(!['accepted','declined'].includes(decision))throw Error('请选择接受面试或不通过');
+ if(!['accepted','declined'].includes(decision))throw Error('请选择确认通过或不通过');
  if(typeof reason!=='string'||reason.length>2000||(decision==='declined'&&!reason.trim()))throw Error('不通过时请填写原因（不超过 2000 字）');
  return {...app.screening,status:decision,reason:decision==='declined'?reason.trim():'',reviewedAt:new Date().toISOString(),reviewedBy:person};
 }

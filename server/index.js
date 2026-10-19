@@ -78,7 +78,7 @@ app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async
   if(!app||req.user.role!=='interviewer'||app.screening?.interviewer!==req.user.name){await conn.rollback();return res.status(403).json({error:'无权确认此简历'});}
   app.screening=decideScreening(app,req.user,req.body.decision,req.body.reason||'');
   terminateFailedApplication(app,req.user.name);
-  app.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:app.screening.status==='accepted'?'接受首轮面试':`简历筛选不通过：${app.screening.reason}`});
+  app.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:app.screening.status==='accepted'?'简历确认通过':`简历筛选不通过：${app.screening.reason}`});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,'确认推荐简历',app.id]);await conn.commit();
   res.json(visibleState(state,req.user,await users(pool),revision+1));

@@ -88,7 +88,7 @@ try{
  try{
   assert.equal((await mcp.listTools()).tools.length,5);assert.equal((await otherMcp.listTools()).tools.length,3);
   const read=async(client,name,args)=>client.callTool({name,arguments:args});
-  assert.equal(JSON.parse((await read(mcp,'list_my_interviews',{})).content[0].text).total,1);
+  assert.equal(JSON.parse((await read(mcp,'list_my_interviews',{})).content[0].text).total,2);
   assert.equal(JSON.parse((await read(otherMcp,'list_my_interviews',{})).content[0].text).total,0);
   assert.equal((await read(otherMcp,'get_my_interview',{applicationId:ids.app})).isError,true);
   assert.equal((await read(otherMcp,'get_interview_file',{applicationId:ids.app,kind:'resume'})).isError,true);

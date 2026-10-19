@@ -77,3 +77,5 @@ Returned feedback display clarified 2026-10-19: show 待提交 rather than 面�
 Feedback saves clarified 2026-10-19: browser feedback editing supplies explicit application/round IDs to save only the current feedback, overwriting its editable draft without detecting targets via aggregate JSON differences. Preserve server ownership, revision conflict and submitted-lock validation. Formal submission requires explicit confirmation that submitted feedback cannot be edited; draft saves do not prompt.
 
 Upcoming visibility clarified 2026-10-19: keep valid ongoing unsubmitted appointments in 即将面试 until their scheduled time plus one hour; then hide only from that view, retaining feedback tasks and full history. Recompute the time filter every 10 seconds even without data changes. Elapsed time never marks feedback submitted or interview completed.
+
+Feedback helper display clarified 2026-10-19: do not show return reasons in HR round details, interviewer task cards or feedback forms. Preserve stored feedback and audit history. Returned editable records remain 待提交; submitted feedback shows only its locked status without directing the interviewer through a return workflow.

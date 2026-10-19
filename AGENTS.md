@@ -81,3 +81,5 @@ Upcoming visibility clarified 2026-10-19: keep valid ongoing unsubmitted appoint
 Feedback helper display clarified 2026-10-19: do not show return reasons in HR round details, interviewer task cards or feedback forms. Preserve stored feedback and audit history. Returned editable records remain 待提交; submitted feedback shows only its locked status without directing the interviewer through a return workflow.
 
 Reviewer progress clarified 2026-10-19: accepted resume reviewers see whether the first interview is scheduled and a scheduled badge in full candidate records, using booleans only. Do not expose other interviewers’ arrangements or feedback. Resume-review helper states rejection immediately ends the application.
+
+Interviewer flow visibility clarified 2026-10-19: show job, current workflow round and stage summary directly on each candidate card before collapsed records. Derive the safe name/detail/tone summary from the full application on the server before filtering other interviewers’ rounds; never send full other-round objects or private final reasons in this summary. This also covers resume reviewers who conduct no scheduled round.

@@ -1,5 +1,5 @@
 import {isRecruiter,canManageAccounts} from '../src/permissions.js';
-import {terminateFailedApplication} from '../src/model.js';
+import {terminateFailedApplication,applicationStage} from '../src/model.js';
 import {canReviewResume} from './screening.js';
 import {randomUUID} from 'node:crypto';
 import {hashPassword} from './auth.js';
@@ -30,7 +30,7 @@ export async function readState(db,lock=false){const [[row]]=await db.query('SEL
 export async function users(db){const [rows]=await db.query('SELECT id,username,name,role,frozen FROM recruitment_users ORDER BY created_at,id');return rows;}
 export function visibleState(state,user,userList,revision){
  if(isRecruiter(user))return {...structuredClone(state),applications:state.applications.map(a=>({...structuredClone(a),rounds:a.rounds.map(r=>({...structuredClone(r),feedback:['none','draft','returned'].includes(r.feedback.status)?{status:r.feedback.status,returnReason:r.feedback.returnReason||''}:r.feedback}))})),users:canManageAccounts(user)?userList:userList.filter(u=>u.role==='interviewer').map(({id,name,role,frozen})=>({id,name,role,frozen})),revision};
- const applications=state.applications.filter(a=>canReviewResume(a,user)||a.rounds.some(r=>r.time&&r.interviewer===user.name)).map(a=>({...a,screening:canReviewResume(a,user)?{...a.screening,interviewsScheduled:a.rounds.some(r=>r.time&&!r.cancelled),firstInterviewScheduled:!!(a.rounds[0]?.time&&!a.rounds[0]?.cancelled)}:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>r.time&&r.interviewer===user.name).map(r=>{const {feedbackVersions,...own}=r;return own;})}));
+ const applications=state.applications.filter(a=>canReviewResume(a,user)||a.rounds.some(r=>r.time&&r.interviewer===user.name)).map(a=>({...a,progress:(()=>{const {name,detail,tone}=applicationStage(a);return {name,detail:a.status==='进行中'?detail:'本次应聘已结束',tone};})(),screening:canReviewResume(a,user)?{...a.screening,interviewsScheduled:a.rounds.some(r=>r.time&&!r.cancelled),firstInterviewScheduled:!!(a.rounds[0]?.time&&!a.rounds[0]?.cancelled)}:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>r.time&&r.interviewer===user.name).map(r=>{const {feedbackVersions,...own}=r;return own;})}));
  const ids=new Set(applications.map(a=>a.candidateId));
  return {candidates:state.candidates.filter(c=>ids.has(c.id)).map(c=>{const {notes,resumes,...safe}=c;return safe;}),applications,templates:[],users:[user],revision};
 }

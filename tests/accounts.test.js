@@ -31,3 +31,11 @@ test('管理员重置密码：加密保存并撤销凭证，不改变冻结状�
  await assert.rejects(resetAccountPassword(fakePool([{...actor,frozen:1}]),actor,'a',password),/权限已失效/);
  const self=fakePool([actor]);await resetAccountPassword(self,actor,'a',password);assert.ok(self.calls.includes('commit'));
 });
+
+test('管理员可修改角色并撤销旧凭证，保持密码与冻结状态，禁止无权限与自降级',async()=>{
+ const {setAccountRole}=await import('../server/accounts.js');const actor={id:'a',role:'admin',frozen:0},target={id:'i',role:'interviewer',frozen:0},pool=fakePool([actor,target]);
+ assert.deepEqual(await setAccountRole(pool,actor,'i','HR'),{ok:true,role:'HR'});const update=pool.calls.find(c=>c.sql?.startsWith('UPDATE'));assert.deepEqual(update.args,['HR','i']);assert.ok(!update.sql.includes('password')&&!update.sql.includes('frozen'));assert.ok(pool.calls.includes('commit'));for(const table of ['recruitment_sessions','recruitment_mcp_tokens'])assert.ok(pool.calls.some(c=>c.sql?.includes('DELETE FROM '+table)&&c.args[0]==='i'));assert.ok(pool.calls.some(c=>c.sql?.includes('recruitment_audit')&&c.args[1]==='修改账号角色：interviewer → HR'));
+ for(const role of ['HR','interviewer'])await assert.rejects(setAccountRole(pool,{id:'h',role},'i','HR'),e=>e.status===403);await assert.rejects(setAccountRole(pool,actor,'i','invalid'),e=>e.status===400);
+ await assert.rejects(setAccountRole(fakePool([actor,target]),actor,'a','HR'),/当前登录/);await assert.rejects(setAccountRole(fakePool([{...actor,frozen:1},target]),actor,'i','HR'),e=>e.status===403);await assert.rejects(setAccountRole(fakePool([actor]),actor,'missing','HR'),e=>e.status===404);
+ const same=fakePool([actor,{...target,role:'HR'}]);await setAccountRole(same,actor,'i','HR');assert.ok(!same.calls.some(c=>c.sql?.startsWith('UPDATE')||c.sql?.startsWith('DELETE')));
+});

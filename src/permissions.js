@@ -12,3 +12,9 @@ export function isApplicationCreator(user,app){
 export function canManageApplication(user,app){
  return user?.role==='admin'||user?.role==='HR'&&isApplicationCreator(user,app);
 }
+
+export function applicationCreatorName(app,users=[]){
+ const account=app.createdBy&&users.find(u=>u.id===app.createdBy);
+ const created=[...(app.history||[])].reverse().find(h=>h.action?.startsWith('创建应聘'));
+ return account?.name||created?.actor||'未记录';
+}

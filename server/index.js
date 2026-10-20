@@ -1,3 +1,4 @@
+import {mountAvailability,validateAvailabilityBookings} from './availability.js';
 import {mountResumeLibrary,compactCandidates,mergePartialCandidates} from './resume-library.js';
 import {mountRecruitmentDashboard} from './recruitment-dashboard.js';
 import {directoryVersion,readVersion} from './state-version.js';
@@ -54,6 +55,7 @@ app.get('/api/state/version',async(req,res)=>res.json({...await readVersion(pool
 app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool),userList=await users(pool);res.json({user:req.user,data:req.query.compact==='1'&&isRecruiter(req.user)?visibleState(compactCandidates(state,String(req.query.candidateIds||'').split(',').filter(Boolean)),req.user,userList,revision):visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
 mountResumeLibrary(app,{pool});
+mountAvailability(app,{pool});
 mountRecruitmentDashboard(app,{loadSnapshot:async()=>{const [{state},userList]=await Promise.all([readState(pool),users(pool)]);return {state,users:userList};}});
 app.post('/api/users/:id/password',admin,express.json({limit:'4kb'}),async(req,res)=>{const result=await resetAccountPassword(pool,req.user,req.params.id,req.body.password);if(req.params.id===req.user.id)res.clearCookie('recruitment_session',{path:'/api'});res.json(result);});
 app.patch('/api/users/:id/role',admin,express.json({limit:'1kb'}),async(req,res)=>res.json(await setAccountRole(pool,req.user,req.params.id,req.body.role)));
@@ -73,6 +75,7 @@ app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>{
   const userList=context.filter(row=>row.kind==='user').map(({id,username,name,role,frozen})=>({id,username,name,role,frozen}));
   const files=context.filter(row=>row.kind==='file');
   const state=validateHRState(previous,mergePartialCandidates(previous,req.body),userList.filter(u=>u.role==='interviewer').map(u=>u.name),files,req.user.name,userList.filter(u=>u.role==='interviewer'&&!u.frozen).map(u=>u.name),req.user);
+  await validateAvailabilityBookings(conn,previous,state,userList);
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,'更新招聘数据','state']);await conn.commit();res.json(req.body.partialCandidates===true?visibleState(compactCandidates(state,Array.isArray(req.body.loadedCandidateIds)?req.body.loadedCandidateIds:[]),req.user,userList,revision+1):visibleState(state,req.user,userList,revision+1));
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}

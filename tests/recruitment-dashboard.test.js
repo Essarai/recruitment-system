@@ -66,3 +66,16 @@ test('HR 大盘服务端强制本人范围，伪造 HR 筛选无效；面试官�
 test('缺失前序记录时不伪造漏斗转化，零样本不伪造通过率和结束用时',()=>{
  const state=fixture();state.applications=[app('a','ha',date('01'),{status:'公司决定录用',rounds:[]})];const a=buildRecruitmentDashboard(state,users,admin,period,now).analysis;assert.equal(a.funnel.find(f=>f.key==='hired').conversion,null);assert.equal(a.summary.passRate,null);assert.equal(a.summary.cycleHours,null);assert.equal(a.summary.hired,1);
 });
+
+test('import drilldown uses immutable candidate owner/date, independent of job and application cohorts',()=>{
+ const state=fixture();state.candidates.push({id:'new',name:'未投递候选人',createdBy:'ha',createdAt:date('18'),notes:'不应放入统计响应的完整备注'},{id:'former',name:'历史录入',createdBy:'former-hr',createdAt:date('17')});
+ const report=buildRecruitmentDashboard(state,[...users,{id:'former-hr',name:'曾任HR',role:'interviewer'}],admin,{...period,job:'不存在'});
+ assert.equal(report.analysis.summary.created,0);assert.equal(report.imports.total,3);
+ assert.deepEqual(report.imports.records.map(r=>r.id),['new','former','a']);
+ assert.equal(report.imports.people.find(p=>p.id==='ha').count,2);
+ assert.equal(report.imports.records.find(r=>r.id==='former').ownerName,'曾任HR');
+ assert.equal(JSON.stringify(report.imports).includes('不应放入统计响应'),false);
+ const own=buildRecruitmentDashboard(state,users,users[0],{...period,hr:'hb'});
+ assert.equal(own.imports.total,2);assert.ok(own.imports.records.every(r=>r.ownerId==='ha'));
+ assert.throws(()=>buildRecruitmentDashboard(state,users,{id:'x',role:'interviewer'},period));
+});

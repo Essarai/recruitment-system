@@ -16,10 +16,18 @@ export function candidateDetails(value,requireEducation=false){
  if(requireEducation&&!educationOptions.includes(details.education))throw Error('请选择必填的学历分类');
  return details;
 }
+export const hrNotesLength=value=>Array.from(String(value??'').replace(/\s/g,'')).length;
+export function validateHRNotes(value){
+ const notes=String(value??'').trim(),length=hrNotesLength(notes);
+ if(length<20)throw Error('请补充 HR 前置沟通记录，至少 20 字（不计空白），记录实际沟通内容与初步判断');
+ if(length>500||notes.length>2000)throw Error('HR 前置沟通记录最多 500 字（不计空白）');
+ return notes;
+}
 export function validateCandidateIntake(value){
  const details=candidateDetails(value,true);
  for(const [key,label] of [['name','姓名'],['phone','手机号'],['email','邮箱'],...profileFields,['notes','HR 备注']])if(!String(value[key]??'').trim())throw Error(`请填写${label}`);
  validateContacts(value);
+ details.notes=validateHRNotes(details.notes);
  return details;
 }
 export const results = ['进行中','公司决定录用','未录用','候选人退出'];

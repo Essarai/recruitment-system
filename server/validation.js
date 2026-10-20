@@ -2,7 +2,7 @@ import {canManageApplication} from '../src/permissions.js';
 import {candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {normalizeScreening} from './screening.js';
 import {isDeepStrictEqual as equal} from 'node:util';
-import {candidateDetails,validateCandidateIntake,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
+import {candidateDetails,validateHRNotes,validateCandidateIntake,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
 export function text(value,label,max=1000,required=false){if(value==null)value='';if(typeof value!=='string'||value.length>max||(required&&!value.trim()))throw Error(`${label}无效`);return value.trim();}
 function array(value,label,max=5000){if(!Array.isArray(value)||value.length>max)throw Error(`${label}无效`);return value;}
 function id(value){return text(value,'记录 ID',80,true);}
@@ -53,7 +53,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   if(old&&(old.candidateId!==candidateId||old.job!==next.job))throw Error('不能更换已有应聘的候选人或岗位');
   if(old){if(old.status!==a.status){const ended=endApplication(old,a.status,next.reason);next.endedAt=ended.endedAt;}else if(old.reason!==next.reason)throw Error('不能改写已保存的结束原因');}
   else if(a.status!=='进行中'||next.reason)throw Error('新应聘必须为进行中');
-  if(!old){if(!canCreateApplication(previous.applications,candidateId)||newApplicants.has(candidateId))throw Error('该候选人已有进行中的应聘，请先结束现有流程');newApplicants.add(candidateId);const template=templates.find(t=>t.id===a.templateId);if(!template||a.job!==template.name)throw Error('应聘岗位必须来自所选流程名称');if(!Array.isArray(a.rounds)||a.rounds.length!==template.nodes.length||a.rounds.some((r,i)=>r.name!==template.nodes[i].name))throw Error('面试节点须与所选流程一致');next.templateId=template.id;next.jd=template.jd;candidateDetails(candidates.find(c=>c.id===candidateId),true);}
+  if(!old){if(!canCreateApplication(previous.applications,candidateId)||newApplicants.has(candidateId))throw Error('该候选人已有进行中的应聘，请先结束现有流程');newApplicants.add(candidateId);const template=templates.find(t=>t.id===a.templateId);if(!template||a.job!==template.name)throw Error('应聘岗位必须来自所选流程名称');if(!Array.isArray(a.rounds)||a.rounds.length!==template.nodes.length||a.rounds.some((r,i)=>r.name!==template.nodes[i].name))throw Error('面试节点须与所选流程一致');next.templateId=template.id;next.jd=template.jd;candidateDetails(candidates.find(c=>c.id===candidateId),true);validateHRNotes(candidates.find(c=>c.id===candidateId).notes);}
   if(!a.resume?.id)throw Error('每次应聘必须关联已上传的简历');
   const file=files.find(f=>f.id===a.resume.id);if(!file)throw Error('简历附件不存在，请重新上传');
   next.resume={id:file.id,name:file.name,size:file.size,type:file.mime};

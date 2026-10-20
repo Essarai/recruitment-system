@@ -2,7 +2,7 @@ import {test} from 'node:test';import assert from 'node:assert/strict';
 import {applicationFromCandidate,candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {validateHRState} from '../server/validation.js';import {emptyState,visibleState} from '../server/database.js';
 const file={id:'file',name:'resume.pdf',mime:'application/pdf',size:100};
-const candidate={id:'c',name:'张三',phone:'13800138000',email:'person@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通',education:'普本',resumes:[{id:file.id}]};
+const candidate={id:'c',name:'张三',phone:'13800138000',email:'person@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已电话沟通，候选人意向产品岗位，可两周内到岗，建议安排业务面试。',education:'普本',resumes:[{id:file.id}]};
 const template={id:'t',name:'产品经理',jd:'岗位职责',nodes:[{name:'初试',interviewer:'面试官'}]};
 const data=()=>({candidates:[structuredClone(candidate)],templates:[structuredClone(template)],users:[{role:'interviewer',name:'面试官'}],applications:[]});
 const selected={candidateId:'c',templateId:'t',resumeId:'file',reviewer:'面试官'};
@@ -58,6 +58,6 @@ test('服务端拒绝缺失任一候选人资料，最高学历单独持久化�
 
 test('候选人入库人和时间只取认证信息，编辑不覆盖，面试官不接收 HR 归属字段',()=>{
  const actor={id:'hr-id',name:'HR甲',role:'HR'},input={...emptyState(),candidates:[{...candidate,createdBy:'forged',createdAt:'2099-01-01'}]};const saved=validateHRState(emptyState(),input,[],[file],actor.name,[],actor);const c=saved.candidates[0];assert.equal(c.createdBy,actor.id);assert.notEqual(c.createdAt,'2099-01-01');
- const edit=structuredClone(saved);edit.candidates[0].notes='更新备注';edit.candidates[0].createdBy='someone-else';edit.candidates[0].createdAt='2099-01-01';const updated=validateHRState(saved,edit,[],[file],actor.name,[],actor);assert.equal(updated.candidates[0].createdBy,c.createdBy);assert.equal(updated.candidates[0].createdAt,c.createdAt);
+ const edit=structuredClone(saved);edit.candidates[0].notes='已电话沟通，候选人意向产品岗位，可两周内到岗，建议安排业务面试。补充确认可接受面试安排。';edit.candidates[0].createdBy='someone-else';edit.candidates[0].createdAt='2099-01-01';const updated=validateHRState(saved,edit,[],[file],actor.name,[],actor);assert.equal(updated.candidates[0].createdBy,c.createdBy);assert.equal(updated.candidates[0].createdAt,c.createdAt);
  updated.applications=[{id:'a',candidateId:c.id,status:'进行中',screening:{status:'pending',interviewer:'面试官'},rounds:[]}];const safe=visibleState(updated,{role:'interviewer',name:'面试官'},[],1);assert.equal(safe.candidates[0].createdBy,undefined);assert.equal(safe.candidates[0].createdAt,undefined);
 });

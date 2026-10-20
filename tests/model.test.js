@@ -113,7 +113,7 @@ test('待定可正式提交，保留应聘和后续安排，进度显示待定�
 
 test('候选人最高学历独立于学历背景，所有候选人资料必填且旧档案可读取',async()=>{
  const {validateCandidateIntake,candidateDetails}=await import('../src/model.js');
- const complete={name:'测试',phone:'13800138000',email:'test@example.com',age:'28',highestEducation:'硕士',education:'双非硕',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已沟通'};
+ const complete={name:'测试',phone:'13800138000',email:'test@example.com',age:'28',highestEducation:'硕士',education:'双非硕',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已电话沟通，候选人意向产品岗位，可两周内到岗，建议安排业务面试。'};
  assert.equal(validateCandidateIntake(complete).highestEducation,'硕士');assert.equal(validateCandidateIntake(complete).education,'双非硕');
  for(const key of Object.keys(complete))assert.throws(()=>validateCandidateIntake({...complete,[key]:'  '}),key);
  assert.throws(()=>validateCandidateIntake({...complete,highestEducation:'双九硕'}),/最高学历/);assert.equal(candidateDetails({education:'普本'}).highestEducation,'');

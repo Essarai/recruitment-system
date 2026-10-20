@@ -193,4 +193,4 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 
 .interviewer-candidate-brief{padding:14px 20px 0}.screening-communication{background:#f8fafd;border:1px solid #e4e9f0;border-radius:8px;padding:12px 14px;margin-top:12px}.screening-communication strong{font-size:14px;font-weight:500}.screening-communication p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;margin:6px 0 0}.interviewer-candidate-brief .candidate-meta-line{margin-top:8px;flex-wrap:wrap}.interviewer-candidate-brief .candidate-career{margin-top:0}
 
-.application-list th:nth-child(4){width:29%}.application-list th:nth-child(7){width:12%;min-width:126px}.application-list td:last-child{white-space:nowrap}.application-list td:last-child .text-button{padding:3px 6px}
+.application-list th:nth-child(4){width:29%}.application-list th:nth-child(7){width:12%;min-width:126px}.application-list td:last-child{white-space:nowrap}.application-list td:last-child .text-button{display:block;width:max-content;padding:3px 0}

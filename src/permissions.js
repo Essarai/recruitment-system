@@ -18,3 +18,7 @@ export function applicationCreatorName(app,users=[]){
  const created=[...(app.history||[])].reverse().find(h=>h.action?.startsWith('创建应聘'));
  return account?.name||created?.actor||'未记录';
 }
+
+export function canWithdrawApplication(user,app){
+ return canManageApplication(user,app)&&app?.status==='进行中'&&!app.withdrawnAt&&!['accepted','declined'].includes(app.screening?.status)&&!app.screening?.reviewedAt&&!app.rounds.some(r=>r.feedback?.status&&r.feedback.status!=='none'||r.feedback?.author||r.feedback?.submittedAt||r.feedbackVersions?.length);
+}

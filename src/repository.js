@@ -61,3 +61,8 @@ export async function loadCandidate(id){
 }
 
 export const setAccountRole=(id,role)=>request('/users/'+encodeURIComponent(id)+'/role',{method:'PATCH',body:JSON.stringify({role})});
+
+export async function withdrawApplication(id){
+ const result=await request('/applications/'+encodeURIComponent(id)+'/withdraw',{method:'POST',body:JSON.stringify({revision:baseline.revision,candidateIds:baseline.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-20)})});
+ baseline=structuredClone(result);return result;
+}

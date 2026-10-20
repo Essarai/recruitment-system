@@ -49,7 +49,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    return structuredClone(old);
   }
   if(!candidates.some(c=>c.id===candidateId))throw Error('应聘关联的候选人不存在');
-  const next={...(old?.createdBy?{createdBy:old.createdBy}:!old&&actorUser?{createdBy:actorUser.id}:{}),id:id(a.id),candidateId,templateId:old?.templateId,job:text(a.job,'岗位',160,true),...(old?.jd!==undefined?{jd:old.jd}:{}),status:a.status,reason:text(a.reason,'结束原因',2000),endedAt:old?.endedAt||undefined,resume:null,rounds:[],history:old?.history||[]};
+  const next={...(old?.archivedAt?{archivedAt:old.archivedAt,archivedBy:old.archivedBy}:{}),...(old?.withdrawnAt?{withdrawnAt:old.withdrawnAt,withdrawnBy:old.withdrawnBy}:{}),...(old?.createdBy?{createdBy:old.createdBy}:!old&&actorUser?{createdBy:actorUser.id}:{}),id:id(a.id),candidateId,templateId:old?.templateId,job:text(a.job,'岗位',160,true),...(old?.jd!==undefined?{jd:old.jd}:{}),status:a.status,reason:text(a.reason,'结束原因',2000),endedAt:old?.endedAt||undefined,resume:null,rounds:[],history:old?.history||[]};
   if(old&&(old.candidateId!==candidateId||old.job!==next.job))throw Error('不能更换已有应聘的候选人或岗位');
   if(old){if(old.status!==a.status){const ended=endApplication(old,a.status,next.reason);next.endedAt=ended.endedAt;}else if(old.reason!==next.reason)throw Error('不能改写已保存的结束原因');}
   else if(a.status!=='进行中'||next.reason)throw Error('新应聘必须为进行中');

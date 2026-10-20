@@ -1,3 +1,4 @@
+import {mountWithdrawal} from './withdrawal.js';
 import {mountAvailability,validateAvailabilityBookings} from './availability.js';
 import {mountResumeLibrary,compactCandidates,mergePartialCandidates} from './resume-library.js';
 import {mountRecruitmentDashboard} from './recruitment-dashboard.js';
@@ -55,6 +56,7 @@ app.get('/api/state/version',async(req,res)=>res.json({...await readVersion(pool
 app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool),userList=await users(pool);res.json({user:req.user,data:req.query.compact==='1'&&isRecruiter(req.user)?visibleState(compactCandidates(state,String(req.query.candidateIds||'').split(',').filter(Boolean)),req.user,userList,revision):visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
 mountResumeLibrary(app,{pool});
+mountWithdrawal(app,{pool});
 mountAvailability(app,{pool});
 mountRecruitmentDashboard(app,{loadSnapshot:async()=>{const [{state},userList]=await Promise.all([readState(pool),users(pool)]);return {state,users:userList};}});
 app.post('/api/users/:id/password',admin,express.json({limit:'4kb'}),async(req,res)=>{const result=await resetAccountPassword(pool,req.user,req.params.id,req.body.password);if(req.params.id===req.user.id)res.clearCookie('recruitment_session',{path:'/api'});res.json(result);});

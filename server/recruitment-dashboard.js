@@ -40,7 +40,7 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
  if(hr.length>80||job.length>160)throw Object.assign(Error('筛选条件无效'),{status:400});
  const inPeriod=value=>{const day=recruitmentDay(value);return !from&&!to||!!day&&(!from||day>=from)&&(!to||day<=to);};
  const candidates=new Map(state.candidates.map(c=>[c.id,c])),nowTime=recruitmentTime(now),people=users.filter(u=>['HR','admin'].includes(u.role));
- const records=state.applications.map(app=>({app,owner:ownerOf(app,people),created:recruitmentTime(creation(app)?.at)!==null?creation(app).at:null})).filter(r=>(!hr||r.owner.id===hr)&&(!job||r.app.job===job));
+ const records=state.applications.filter(a=>!a.withdrawnAt).map(app=>({app,owner:ownerOf(app,people),created:recruitmentTime(creation(app)?.at)!==null?creation(app).at:null})).filter(r=>(!hr||r.owner.id===hr)&&(!job||r.app.job===job));
  const cohort=records.filter(r=>inPeriod(r.created)),ended=records.filter(r=>r.app.status!=='进行中'&&inPeriod(r.app.endedAt));
  const groups=new Map(people.filter(u=>!hr||u.id===hr).map(u=>[u.id,{id:u.id,name:u.name,role:u.role,frozen:!!u.frozen,imported:0,created:0,ongoing:0,waitHR:0,waitInterviewer:0,hired:0,terminated:0}]));
  function group(owner){if(!groups.has(owner.id))groups.set(owner.id,{id:owner.id,name:owner.name,role:owner.role,imported:0,created:0,ongoing:0,waitHR:0,waitInterviewer:0,hired:0,terminated:0});return groups.get(owner.id);}

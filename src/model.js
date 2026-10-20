@@ -67,7 +67,7 @@ export function endApplication(app,status,reason){
 
 export function applicationStage(app,now=Date.now()){
  if(!app)return {name:'未创建应聘',detail:'可创建新的应聘记录',tone:'neutral'};
- if(app.status!=='进行中')return {name:applicationStatus(app),detail:app.reason||'应聘已结束',tone:app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
+ if(app.status!=='进行中')return {name:applicationStatus(app),detail:app.reason||'应聘已结束',tone:app.withdrawnAt?'neutral':app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
  if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='accepted'?'简历确认已通过，可安排面试':s?.status==='pending'?`${s.interviewer} · 等待确认`:s?.status==='declined'?s.reason:'先指定简历确认人'};}
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
@@ -117,7 +117,7 @@ export function applicationProgress(app,now=Date.now()){
  ];
 }
 
-export const applicationStatus=app=>app.status==='公司决定录用'?'已录用':['未录用','候选人退出'].includes(app.status)?'流程终止':'进行中';
+export const applicationStatus=app=>app.withdrawnAt?'已撤回':app.status==='公司决定录用'?'已录用':['未录用','候选人退出'].includes(app.status)?'流程终止':'进行中';
 export function applicationFailure(app){
  if(app.screening?.status==='declined')return {reason:`简历筛选不通过：${app.screening.reason}`,at:app.screening.reviewedAt};
  const round=app.rounds.find(r=>r.feedback.status==='submitted'&&r.feedback.conclusion==='建议不通过');

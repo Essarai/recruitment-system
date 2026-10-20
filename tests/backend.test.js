@@ -136,3 +136,14 @@ test('应聘按原始创建时间倒序，修改时间不影响，缺失时间�
  const {newestApplications}=await import('../src/model.js');const old={id:'old',history:[{action:'修改应聘',at:'2026-10-21T00:00:00Z'},{action:'创建应聘记录',at:'2026-10-01T00:00:00Z'}]},recent={id:'recent',history:[{action:'创建应聘',at:'2026-10-19T00:00:00Z'}]},same={id:'same',history:[{action:'创建应聘',at:'2026-10-19T00:00:00Z'}]},unknown={id:'unknown',history:[{action:'修改',at:'2026-10-22T00:00:00Z'},{action:'创建应聘',at:'invalid'}]};const input=[old,unknown,recent,same],copy=structuredClone(input);assert.deepEqual(newestApplications(input).map(a=>a.id),['recent','same','old','unknown']);assert.deepEqual(input,copy);
  const duplicate={id:'dup',history:[{action:'创建应聘',at:'2026-10-23T00:00:00Z'},{action:'创建应聘',at:'2026-09-01T00:00:00Z'}]};assert.deepEqual(newestApplications([duplicate,old]).map(a=>a.id),['old','dup']);
 });
+
+test('only current pending resume reviewer sees HR communication notes in browser; MCP and other interviewers remain isolated',async()=>{
+ const {myInterviews}=await import('../server/mcp.js');
+ const s=state(),reviewer={id:'reviewer',role:'interviewer',name:'面试官甲'};
+ s.applications[0].screening={status:'pending',interviewer:reviewer.name};
+ assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,s.candidates[0].notes);
+ assert.equal(visibleState(s,{name:'面试官乙',role:'interviewer'},[],1).candidates[0].notes,undefined);
+ assert.equal(myInterviews(s,reviewer).candidates[0].notes,undefined);
+ for(const status of ['accepted','declined','skipped']){s.applications[0].screening.status=status;assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,undefined);}
+ s.applications[0].screening.status='pending';s.applications[0].status='未录用';assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,undefined);
+});

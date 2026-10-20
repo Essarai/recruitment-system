@@ -1,7 +1,4 @@
-import phoneIcon from '@material-design-icons/svg/outlined/phone.svg';
-import emailIcon from '@material-design-icons/svg/outlined/email.svg';
-import schoolIcon from '@material-design-icons/svg/outlined/school.svg';
-import ageIcon from '@material-design-icons/svg/outlined/cake.svg';
+import {CandidateBrief} from './CandidateBrief';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
 import React,{useState} from 'react';
@@ -24,7 +21,7 @@ export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
   <div className="table-wrap"><table><thead><tr><th>候选人资料</th><th>档案操作</th></tr></thead><tbody>
    {candidates.map(({candidate:c,applicationCount,active,job,stage,files})=>{
     return <tr key={c.id}>
-     <td className="library-candidate-details"><div className="candidate-identity"><button className="name-link candidate-name" onClick={()=>archive(c.id)}>{c.name}</button><span className="candidate-application-summary">{applicationCount?<><span>投递岗位：{job}</span><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span></>:<span>暂无应聘记录</span>}</span></div><div className="candidate-career"><span>{c.currentTitle||'职位待补充'}</span><span>{c.company||'公司待补充'}</span><span>{workExperienceLabel(c.experience)||'工作经验待补充'}</span><span>{c.city||'城市待补充'}</span></div><div className="candidate-meta-line">{[[phoneIcon,'电话',c.phone||'待补充','phone'],[emailIcon,'邮箱',c.email||'待补充','email'],[schoolIcon,'学历',[c.highestEducation||'待补充',educationOptions.includes(c.education)?c.education:''].filter(Boolean).join(' · '),'education'],[ageIcon,'年龄',c.age?`${c.age}岁`:'待补充','age']].map(([icon,label,value,key])=><span className={`candidate-meta-item meta-${key}`} key={key} title={`${label}：${value}`}><img src={icon} alt={label}/><span>{value}</span></span>)}</div>{c.notes&&<small className="sub candidate-note-preview" title={c.notes}>备注：{c.notes}</small>}</td>
+     <td className="library-candidate-details"><div className="candidate-identity"><button className="name-link candidate-name" onClick={()=>archive(c.id)}>{c.name}</button><span className="candidate-application-summary">{applicationCount?<><span>投递岗位：{job}</span><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span></>:<span>暂无应聘记录</span>}</span></div><CandidateBrief candidate={c}/></td>
      <td><div className="library-actions">{files[0]?.id&&<ResumeLink app={{resume:files[0]}} className="text-button">{files[0].name.toLowerCase().endsWith('.pdf')?'预览简历':'下载简历'}</ResumeLink>}<button className="text-button" onClick={()=>archive(c.id)}>查看档案</button><button className="text-button" onClick={()=>open('candidate',{candidateId:c.id})}>编辑资料</button><button className="text-button" onClick={()=>open('candidateResume',{candidateId:c.id})}>更新简历</button>{!active&&<button className="text-button" onClick={()=>open('createApplication',{candidateId:c.id})}>{applicationCount?'重新捞起':'创建应聘'}</button>}</div><small className="sub library-version-count">{files.length?`${files.length} 份简历版本`:'暂无简历附件'}</small></td>
     </tr>;
    })}

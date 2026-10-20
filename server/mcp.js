@@ -14,7 +14,7 @@ const feedbackStatusLabel=status=>({none:'待提交',draft:'草稿待提交',ret
 
 export function myInterviews(state,user){
  if(user.role!=='interviewer')throw Error('仅面试官可以使用个人 MCP');
- const view=visibleState(state,user,[],state.revision||0);
+ const view=visibleState(state,user,[],state.revision||0,{screeningNotes:false});
  for(const app of view.applications)for(const round of app.rounds)round.feedback={...round.feedback,statusLabel:feedbackStatusLabel(round.feedback.status)};
  return view;
 }

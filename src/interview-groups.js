@@ -17,7 +17,7 @@ export function interviewGroups(data,person,query='',now=Date.now()){
    for(const round of rounds){
     if(round.cancelled||round.feedback.status==='submitted')continue;
     if(['returned','draft'].includes(round.feedback.status)||new Date(round.time).getTime()<=now)tasks.push({kind:'feedback',app,round});
-    if(app.status==='进行中'&&new Date(round.time).getTime()+60*60*1000>now)upcoming.push({kind:'upcoming',app,round});
+    if(app.status==='进行中'&&new Date(round.time).getTime()+60*60*1000>now)upcoming.push({kind:'upcoming',app,round,completed:now>=new Date(round.time).getTime()+10*60*1000});
    }
   }
   upcoming.sort((a,b)=>new Date(a.round.time)-new Date(b.round.time));

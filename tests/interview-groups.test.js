@@ -4,6 +4,15 @@ import {interviewGroups,upcomingInterviewGroups} from '../src/interview-groups.j
 import {visibleState} from '../server/database.js';
 const now=Date.parse('2026-10-18T10:00:00Z');
 const round=(id,person,time,status='none',cancelled=false)=>({id,interviewer:person,time,feedback:{status},cancelled});
+test('即将面试开始满十分钟显示已完成标签，不提交面评或改变流程，满一小时仍移出',()=>{
+ const start=Date.parse('2026-10-21T10:00:00+08:00');
+ const data={candidates:[{id:'c',name:'候选人'}],applications:[{id:'a',candidateId:'c',status:'进行中',rounds:[round('r','甲',new Date(start).toISOString())]}]};
+ const before=structuredClone(data);
+ for(const at of [start-1,start,start+600000-1])assert.equal(interviewGroups(data,'甲','',at)[0].upcoming[0].completed,false);
+ for(const at of [start+600000,start+3600000-1])assert.equal(interviewGroups(data,'甲','',at)[0].upcoming[0].completed,true);
+ assert.equal(interviewGroups(data,'甲','',start+3600000)[0].upcoming.length,0);
+ assert.deepEqual(data,before);
+});
 test('即将面试按各候选人最早会议升序排列，组内按时间排序且不改变其他视图顺序',()=>{
  const data={candidates:['late','early','tie','history'].map(id=>({id,name:id})),applications:[
   {id:'late',candidateId:'late',status:'进行中',rounds:[round('late','甲','2026-10-20T10:00:00Z','draft')]},

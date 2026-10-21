@@ -1,3 +1,7 @@
+export function upcomingInterviewGroups(groups){
+ return groups.filter(group=>group.upcoming.length).sort((a,b)=>new Date(a.upcoming[0].round.time)-new Date(b.upcoming[0].round.time));
+}
+
 export function interviewGroups(data,person,query='',now=Date.now()){
  const groups=[];
  for(const candidate of data.candidates){

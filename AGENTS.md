@@ -145,3 +145,5 @@ Application withdrawal confirmed 2026-10-20: creator HR/admin may withdraw ongoi
 Application-list actions clarified 2026-10-20: stack 查看详情 and 撤回 vertically in the operation cell, left aligned with its header. Retain compact borderless blue text actions and existing visibility/withdrawal permissions.
 
 Workflow-template permissions clarified 2026-10-21: only administrators maintain workflow templates (name, JD, reviewer, nodes, ordering); ordinary HR has no 流程设置 navigation or editor and cannot mutate templates through aggregate saves. Preserve unchanged canonical templates exactly in HR saves, including historical defaults. HR still reads/selects existing templates and creates/manages their own applications. When no templates exist, HR creation explains that an administrator must configure them; only admins get the configuration link.
+
+Upcoming interview ordering clarified 2026-10-21: in My Interviews 即将面试, sort candidate cards by their earliest visible upcoming meeting ascending before pagination; retain chronological rounds within each candidate, stable equal-time ordering and existing todo/all ordering. Keep the one-hour visibility cutoff unchanged.

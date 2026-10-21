@@ -1,9 +1,22 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {interviewGroups} from '../src/interview-groups.js';
+import {interviewGroups,upcomingInterviewGroups} from '../src/interview-groups.js';
 import {visibleState} from '../server/database.js';
 const now=Date.parse('2026-10-18T10:00:00Z');
 const round=(id,person,time,status='none',cancelled=false)=>({id,interviewer:person,time,feedback:{status},cancelled});
+test('即将面试按各候选人最早会议升序排列，组内按时间排序且不改变其他视图顺序',()=>{
+ const data={candidates:['late','early','tie','history'].map(id=>({id,name:id})),applications:[
+  {id:'late',candidateId:'late',status:'进行中',rounds:[round('late','甲','2026-10-20T10:00:00Z','draft')]},
+  {id:'early',candidateId:'early',status:'进行中',rounds:[round('second','甲','2026-10-21T10:00:00Z'),round('first','甲','2026-10-19T10:00:00Z')]},
+  {id:'tie',candidateId:'tie',status:'进行中',rounds:[round('tie','甲','2026-10-19T10:00:00Z')]},
+  {id:'history',candidateId:'history',status:'未录用',rounds:[round('old','甲','2026-10-17','submitted')]}
+ ]};
+ const groups=interviewGroups(data,'甲','',now);
+ assert.deepEqual(groups.map(g=>g.candidate.id),['late','early','tie','history']);
+ assert.deepEqual(upcomingInterviewGroups(groups).map(g=>g.candidate.id),['early','tie','late']);
+ assert.deepEqual(groups[1].upcoming.map(t=>t.round.id),['first','second']);
+ assert.deepEqual(groups.map(g=>g.candidate.id),['late','early','tie','history']);
+});
 test('同一候选人跨应聘跨轮次合为一条主记录；同名不同 ID 不合并，保留各自附件和轮次',()=>{
  const data={candidates:[{id:'c1',name:'同名'},{id:'c2',name:'同名'}],applications:[
   {id:'old',candidateId:'c1',status:'未录用',resume:{id:'old-file'},rounds:[round('r1','甲','2026-10-17','submitted'),round('private','乙','2026-10-17')]},

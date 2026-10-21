@@ -3,7 +3,7 @@ import React,{useEffect,useState} from 'react';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
 import {applicationStatus,roundTone} from './model';
-import {interviewGroups} from './interview-groups';
+import {interviewGroups,upcomingInterviewGroups} from './interview-groups';
 
 export function MyInterviews({data,person,query,refresh,open,accept,busy,date,feedbackLabel,onAvailability}){
  const [view,setView]=useState('todo');
@@ -11,7 +11,7 @@ export function MyInterviews({data,person,query,refresh,open,accept,busy,date,fe
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),10000);return()=>clearInterval(timer);},[]);
  const groups=interviewGroups(data,person,query,now);
  const counts={todo:groups.reduce((n,g)=>n+g.tasks.length,0),upcoming:groups.reduce((n,g)=>n+g.upcoming.length,0),all:groups.length};
- const visible=groups.filter(g=>view==='todo'?g.tasks.length:view==='upcoming'?g.upcoming.length:true);
+ const visible=view==='upcoming'?upcomingInterviewGroups(groups):groups.filter(g=>view==='todo'?g.tasks.length:true);
  return <section className="my-interviews"><div className="title-row"><div><h1>我的面试</h1><p className="muted">处理待确认简历和待提交面评，查看即将面试与历史记录</p></div><div className="actions"><button onClick={onAvailability}>面试可用时间</button><button onClick={refresh}>刷新列表</button></div></div>
   <div className="interview-views" aria-label="面试工作视图">{[['todo','待我处理','项'],['upcoming','即将面试','场'],['all','全部候选人','人']].map(([key,label,unit])=><button key={key} aria-pressed={view===key} onClick={()=>setView(key)}>{label}<span>{counts[key]} {unit}</span></button>)}</div>
   <p className="muted work-view-hint">{view==='todo'?'直接处理下方事项，无需展开历史。待 HR 排期和已提交面评不计入待办。':view==='upcoming'?'展示未提交面评的有效安排，计划时间过后保留 1 小时。': '保留每位候选人的应聘、简历确认和各轮面试记录。'}</p>

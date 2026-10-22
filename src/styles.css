@@ -197,3 +197,5 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 
 /* Reveal long communication notes without leaving the compact library row. */
 .resume-library .candidate-note-preview{cursor:help}.resume-library .candidate-note-preview:hover,.resume-library .candidate-note-preview:focus{display:block;-webkit-line-clamp:unset;white-space:pre-wrap;overflow-wrap:anywhere;color:#3c4043;background:#f1f5fb;border-radius:4px;outline:1px solid #dce3ed;padding:6px 8px}
+
+.feishu-application-sync{margin:24px 0;padding:16px;border:1px solid #e4e9f0;border-radius:8px}.feishu-sync-row{padding:16px 0;border-bottom:1px solid #e4e9f0}.feishu-sync-row .section-heading{gap:12px;flex-wrap:wrap}.feishu-sync-row .info{overflow-wrap:anywhere}.feishu-guide li{margin:12px 0;line-height:1.7}.feishu-integration .check{display:flex;align-items:center;gap:8px;margin:12px 0}.feishu-integration .check input{width:auto;min-height:0}

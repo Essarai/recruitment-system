@@ -1,3 +1,7 @@
+import {initializeFeishuBinding,mountFeishuBindingCallback,mountFeishuBinding} from './feishu-binding.js';
+import {initializeFeishu} from './feishu-store.js';
+import {startFeishuWorker} from './feishu-worker.js';
+import {mountFeishuCallback,mountFeishuRoutes} from './feishu-routes.js';
 import {mountWithdrawal} from './withdrawal.js';
 import {mountAvailability,validateAvailabilityBookings} from './availability.js';
 import {mountResumeLibrary,compactCandidates,mergePartialCandidates} from './resume-library.js';
@@ -29,6 +33,8 @@ app.use((req,res,next)=>{
 });
 app.get('/healthz',(req,res)=>res.set('Cache-Control','no-store').json({ok:true}));
 mountInterviewMcp(app,{pool,s3,bucket});
+mountFeishuCallback(app,{pool});
+mountFeishuBindingCallback(app);
 const attempts=new Map();
 app.post('/api/login',express.json({limit:'4kb'}),async(req,res)=>{
  const key=req.ip;const entry=attempts.get(key);if(entry&&entry.until>Date.now()&&entry.count>=10)return res.status(429).json({error:'尝试过于频繁，请 15 分钟后再试'});
@@ -46,6 +52,7 @@ app.use('/api',async(req,res,next)=>{
  if(!user)return res.status(401).json({error:'登录已过期，请重新登录'});req.user=user;next();
 });
 mountMcpTokenManagement(app,{pool,newToken:sessionToken});
+mountFeishuBinding(app,{pool});
 function hr(req,res,next){if(!isRecruiter(req.user))return res.status(403).json({error:'仅管理员或 HR 可以执行此操作'});next();}
 app.post('/api/logout',async(req,res)=>{await pool.execute('DELETE FROM recruitment_sessions WHERE token_hash=?',[tokenHash(getSessionCookie(req))]);res.clearCookie('recruitment_session',{path:'/api'});res.json({ok:true});});
 app.post('/api/password',express.json({limit:'4kb'}),async(req,res)=>{
@@ -56,6 +63,7 @@ app.get('/api/state/version',async(req,res)=>res.json({...await readVersion(pool
 app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool),userList=await users(pool);res.json({user:req.user,data:req.query.compact==='1'&&isRecruiter(req.user)?visibleState(compactCandidates(state,String(req.query.candidateIds||'').split(',').filter(Boolean)),req.user,userList,revision):visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
 mountResumeLibrary(app,{pool});
+mountFeishuRoutes(app,{pool,workerStatus:()=>feishuWorker.status()});
 mountWithdrawal(app,{pool});
 mountAvailability(app,{pool});
 mountRecruitmentDashboard(app,{loadSnapshot:async()=>{const [{state},userList]=await Promise.all([readState(pool),users(pool)]);return {state,users:userList};}});
@@ -130,7 +138,8 @@ app.use((error,req,res,next)=>{
  const infrastructure=error.code||error.$metadata;const status=infrastructure?503:([403,409].includes(error.status)?error.status:400);
  console.error('Request failed',{path:req.path,type:error.name,code:error.code||error.$metadata?.httpStatusCode});res.status(status).json({error:infrastructure?'数据库或文件存储暂时不可用，请稍后重试':error.message||'请求失败'});
 });
-await initializeDatabase(pool);await initializeStorage();
+await initializeDatabase(pool);await initializeStorage();await initializeFeishu(pool);await initializeFeishuBinding(pool);
+const feishuWorker=startFeishuWorker(pool);
 const server=app.listen(Number(process.env.PORT||process.env.API_PORT||3001),process.env.API_HOST||(process.env.NODE_ENV==='production'?'0.0.0.0':'127.0.0.1'),()=>console.log('Recruitment API ready; MySQL and private S3 bucket connected.'));
 const cleanup=setInterval(()=>{for(const [key,value] of attempts)if(value.until<Date.now())attempts.delete(key);pool.query('DELETE FROM recruitment_sessions WHERE expires_at<UTC_TIMESTAMP()').catch(()=>{});},15*60*1000);cleanup.unref();
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(cleanup);server.close(async()=>{await pool.end();s3.destroy();process.exit(0);});});
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(cleanup);feishuWorker.stop();server.close(async()=>{await pool.end();s3.destroy();process.exit(0);});});

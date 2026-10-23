@@ -3,8 +3,17 @@ import {randomBytes} from 'node:crypto';
 import {tokenHash,getSessionCookie} from './auth.js';
 
 export function bindingEnvironment(env=process.env){
- try{const url=new URL(env.FEISHU_OAUTH_REDIRECT_URI);if(url.username||url.password||url.search||url.hash||url.pathname!=='/api/feishu/bind/callback'||!(url.protocol==='https:'||env.NODE_ENV!=='production'&&url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))throw Error();return {ready:Boolean(env.FEISHU_APP_ID&&env.FEISHU_APP_SECRET),redirectUri:url.href,origin:url.origin};}catch{return {ready:false,redirectUri:'',origin:''};}
+ const configured=env.FEISHU_OAUTH_REDIRECT_URI||'';
+ let redirectUri=configured;
+ if(!redirectUri&&env.PUBLIC_ORIGIN)try{const origin=new URL(env.PUBLIC_ORIGIN);if(origin.pathname==='/'&&!origin.search&&!origin.hash&&!origin.username&&!origin.password)redirectUri=origin.origin+'/api/feishu/bind/callback';}catch{}
+ try{
+  const url=new URL(redirectUri);
+  if(url.username||url.password||url.search||url.hash||url.pathname!=='/api/feishu/bind/callback'||!(url.protocol==='https:'||env.NODE_ENV!=='production'&&url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))throw Error();
+  const ready=Boolean(env.FEISHU_APP_ID&&env.FEISHU_APP_SECRET);
+  return {ready,redirectUri:url.href,origin:url.origin,reason:ready?'':'飞书应用凭据尚未配置'};
+ }catch{return {ready:false,redirectUri:'',origin:'',reason:'飞书授权回调地址未配置或无效，请管理员检查 FEISHU_OAUTH_REDIRECT_URI'};}
 }
+
 export async function initializeFeishuBinding(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS recruitment_feishu_bindings(user_id VARCHAR(80) PRIMARY KEY,app_id VARCHAR(100) NOT NULL,tenant_key VARCHAR(100) NOT NULL,open_id VARCHAR(100) NOT NULL,name VARCHAR(200) NOT NULL,bound_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE KEY feishu_identity(app_id,tenant_key,open_id))`);
  await pool.query(`CREATE TABLE IF NOT EXISTS recruitment_feishu_oauth(state_hash CHAR(64) PRIMARY KEY,user_id VARCHAR(80) NOT NULL,session_hash CHAR(64) NOT NULL,expires_at DATETIME NOT NULL)`);
@@ -41,7 +50,7 @@ const query=new URLSearchParams(location.search);history.replaceState(null,'',lo
 export function mountFeishuBinding(app,{pool,env=process.env,identity=code=>fetchBindingIdentity(code,{env})}){
  app.get('/api/feishu/binding',async(req,res)=>{
   const [[row]]=await pool.execute('SELECT name,bound_at FROM recruitment_feishu_bindings WHERE user_id=? AND app_id=?',[req.user.id,env.FEISHU_APP_ID||'']);
-  res.json({ready:bindingEnvironment(env).ready,binding:row?{name:row.name,boundAt:row.bound_at}:null});
+  const config=bindingEnvironment(env);res.json({ready:config.ready,reason:config.reason,binding:row?{name:row.name,boundAt:row.bound_at}:null});
  });
  app.post('/api/feishu/bind/start',async(req,res)=>{
   const state=randomBytes(32).toString('hex'),url=bindingAuthorizationUrl(env,state);

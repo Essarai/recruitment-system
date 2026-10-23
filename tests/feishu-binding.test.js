@@ -25,3 +25,12 @@ test('callback is public with CSP and no interpolation; consumed/expired/wrong-s
  const missingState=await fetch(root+'/api/feishu/bind/callback?code=code');assert.equal(missingState.status,400);assert.match(await missingState.text(),/state/);
  const response=await fetch(root+'/api/feishu/bind/complete',{method:'POST',headers:{'Content-Type':'application/json',Cookie:'recruitment_session=test-session'},body:JSON.stringify({code:'code',state:'a'.repeat(64)})});assert.equal(response.status,400);assert.equal(exchanges,0);assert.equal(transactionStarted,false);
 });
+
+test('binding derives the HTTPS callback from public origin when unset, but rejects explicit invalid redirects',()=>{
+ const settings={FEISHU_APP_ID:'app',FEISHU_APP_SECRET:'secret',PUBLIC_ORIGIN:'https://recruitments.up.railway.app',NODE_ENV:'production'};
+ const result=bindingEnvironment(settings);assert.equal(result.ready,true);assert.equal(result.redirectUri,'https://recruitments.up.railway.app/api/feishu/bind/callback');
+ assert.equal(bindingEnvironment({...settings,FEISHU_OAUTH_REDIRECT_URI:'http://localhost:4173/api/feishu/bind/callback'}).ready,false);
+ assert.equal(bindingEnvironment({...settings,PUBLIC_ORIGIN:'https://user:pass@site.example'}).ready,false);
+ assert.equal(bindingEnvironment({...settings,PUBLIC_ORIGIN:'https://site.example/other'}).ready,false);
+ assert.match(bindingEnvironment({...settings,FEISHU_APP_SECRET:''}).reason,/凭据/);
+});

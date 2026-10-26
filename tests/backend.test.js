@@ -159,3 +159,14 @@ test('HR 可删除未安排轮次，保留历史、顺序及至少一轮的限�
  const reordered=remove(before,'extra');reordered.applications[0].rounds.reverse();assert.throws(()=>validate(before,reordered),/顺序/);
  before.applications[0].createdBy='owner';assert.throws(()=>validate(before,remove(before,'extra'),{id:'other',name:'HR',role:'HR'}),/仅创建/);
 });
+
+test('面试官可见推荐 HR，优先实际推送人，旧记录回退发起人且不泄露其他账号',()=>{
+ const s=state(),person={id:'i',name:'面试官甲',role:'interviewer'};
+ s.applications[0].createdBy='hr';s.applications[0].screening={status:'accepted',interviewer:'面试官乙',sentBy:'实际推送人'};
+ const users=[{id:'hr',name:'发起 HR',role:'HR'}];
+ let view=visibleState(s,person,users,1);assert.equal(view.applications[0].recommendedBy,'实际推送人');assert.equal(view.applications[0].screening,undefined);assert.deepEqual(view.users,[person]);assert.deepEqual(view.applications[0].history,[]);
+ delete s.applications[0].screening;assert.equal(visibleState(s,person,users,1).applications[0].recommendedBy,'发起 HR');
+ delete s.applications[0].createdBy;s.applications[0].history=[{actor:'后续操作人',action:'修改安排'},{actor:'历史发起人',action:'创建应聘'}];assert.equal(visibleState(s,person,[],1).applications[0].recommendedBy,'历史发起人');
+ s.applications[0].history=[];assert.equal(visibleState(s,person,[],1).applications[0].recommendedBy,'未记录');
+ assert.equal(visibleState(s,person,[],1,{screeningNotes:false}).applications[0].recommendedBy,undefined);
+});

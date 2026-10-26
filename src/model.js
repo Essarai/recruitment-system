@@ -1,3 +1,4 @@
+import {reviewSourceValid} from './round-review.js';
 export const highestEducationOptions=['博士','硕士','本科','大专'];
 export const educationOptions=['双九硕','单九硕','双二硕','单二硕','双非硕','九本','211本','普本','大专'];
 export function validateContacts(value){
@@ -48,6 +49,7 @@ export const nextInterview = app => app.status!=='进行中'?null:app.rounds.fil
 export function validateSchedule(app,r,data,people=null){
  validateResumeConfirmation(app);
  if(app.status!=='进行中') throw Error('应聘已结束，不能新增或修改安排');
+ if(app.rounds.findIndex(x=>x.id===r.id)>0&&(!r.time||r.review)){if(r.review?.status!=='accepted'||!reviewSourceValid(app,r))throw Error('请先完成本轮简历审核，再安排面试');if(data.interviewer!==r.review.interviewer)throw Error('更换面试官后须重新审核简历');}
  if(r.feedback.status==='submitted') throw Error('已有正式面评的安排不可修改，请增加一轮面试');
  if(!data.interviewer||(people&&!people.includes(data.interviewer))||!data.time||!Number.isFinite(new Date(data.time).getTime())||!data.location.trim()) throw Error('请填写面试官、有效时间及地点或会议链接');
  if(data.mode==='线上'){let url;try{url=new URL(data.location);}catch{throw Error('请填写完整有效的会议链接');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('会议链接须为不含账号密码的 HTTP/HTTPS 地址');}
@@ -72,7 +74,7 @@ export function applicationStage(app,now=Date.now()){
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
  const round=app.rounds[index];
- const status=round.cancelled?'待重新安排':!round.time?'待安排':round.feedback.status==='returned'?'待提交':new Date(round.time).getTime()<=now?'待提交面评':'待面试';
+ const status=round.review?.status==='pending'?`等待 ${round.review.interviewer||'HR 指定面试官'} 审核简历`:round.cancelled?'待重新安排':!round.time?'待安排':round.feedback.status==='returned'?'待提交':new Date(round.time).getTime()<=now?'待提交面评':'待面试';
  return {tone:roundTone(round,now),name:round.name,detail:`第 ${index+1} / ${app.rounds.length} 轮 · ${status}`,round};
 }
 
@@ -152,4 +154,4 @@ export function newestApplications(applications){
   .sort((a,b)=>a.time===b.time?0:b.time-a.time).map(row=>row.app);
 }
 
-export const canDeleteInterviewRound=(app,r)=>app.status==='进行中'&&app.rounds.length>1&&!r.time&&!r.scheduleEvents?.length&&r.feedback.status==='none'&&!r.feedbackVersions?.length&&!r.feedback.transcript;
+export const canDeleteInterviewRound=(app,r)=>app.status==='进行中'&&app.rounds.length>1&&!r.time&&!r.scheduleEvents?.length&&r.feedback.status==='none'&&!r.feedbackVersions?.length&&!r.feedback.transcript&&!r.review;

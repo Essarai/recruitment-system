@@ -1,3 +1,4 @@
+import {canReviewRound} from '../src/round-review.js';
 import {isRecruiter} from '../src/permissions.js';
 import {isDeepStrictEqual as equal} from 'node:util';
 import {reviewResume} from '../src/model.js';
@@ -23,5 +24,5 @@ export function canReviewResume(app,user){
  return user.role==='interviewer'&&app.status==='进行中'&&app.screening?.interviewer===user.name&&['pending','accepted'].includes(app.screening.status);
 }
 export function canAccessResume(app,user){
- return isRecruiter(user)||canReviewResume(app,user)||app.rounds.some(r=>r.time&&r.interviewer===user.name);
+ return isRecruiter(user)||canReviewResume(app,user)||app.rounds.some(r=>canReviewRound(app,r,user.name))||app.rounds.some(r=>r.time&&r.interviewer===user.name);
 }

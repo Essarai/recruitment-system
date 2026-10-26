@@ -1,3 +1,5 @@
+import {activateRoundReviews} from '../src/round-review.js';
+import {applicationCreatorName} from '../src/permissions.js';
 import {readState,visibleState,users} from './database.js';
 import {text} from './validation.js';
 import {transcriptReference} from './transcripts.js';
@@ -14,7 +16,7 @@ export async function saveInterviewFeedback(pool,user,appId,roundId,body){
   const transcript=await transcriptReference(conn,input.transcript,r.feedback.transcript,a.id,r.id,user);if(transcript)f.transcript=transcript;
   if(body.draft)r.feedback={...f,status:r.feedback.status==='returned'?'returned':'draft',author:user.name,returnReason:r.feedback.returnReason||''};
   else r.feedback=submitFeedback(a,r,user.name,f,body.completed===true);
-  if(!body.draft)terminateFailedApplication(a,user.name);
+  if(!body.draft){terminateFailedApplication(a,user.name);activateRoundReviews(a,applicationCreatorName(a,await users(conn)));}
   a.history.unshift({at:new Date().toISOString(),actor:user.name,action:body.draft?'保存面评草稿':'提交面评'});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[user.id,body.draft?'保存面评草稿':'提交面评',r.id]);await conn.commit();return visibleState(state,user,await users(pool),revision+1);
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}

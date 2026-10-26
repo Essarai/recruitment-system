@@ -25,7 +25,7 @@ test('新应聘岗位取自模板，学历与联系方式强校验，并阻止�
 });
 test('PDF 预签名链接有 300 秒期限，使用 inline 预览且不包含私钥',async()=>{const {S3Client}=await import('@aws-sdk/client-s3');const {signedResumeAccess}=await import('../server/files.js');const client=new S3Client({region:'us-east-1',endpoint:'https://storage.example.com',forcePathStyle:true,credentials:{accessKeyId:'TEST_ACCESS_KEY',secretAccessKey:'test-secret-do-not-expose'}});try{const access=await signedResumeAccess(client,'private-bucket',{name:'简历.pdf',mime:'application/pdf',object_key:'resumes/test.pdf'});const url=new URL(access.url);assert.equal(url.searchParams.get('X-Amz-Expires'),'300');assert.equal(url.searchParams.get('response-content-type'),'application/pdf');assert.ok(url.searchParams.get('response-content-disposition').startsWith('inline'));assert.equal(access.url.includes('test-secret-do-not-expose'),false);}finally{client.destroy();}});
 
-test('独立简历确认后可安排不同面试官，确认只进行一次，HR 不可代确认',async()=>{
+test('独立简历确认后首轮可安排不同面试官，后续须逐轮审核，HR 不可代确认',async()=>{
  const {decideScreening,canAccessResume}=await import('../server/screening.js');
  const t={id:'t-screen',name:'产品经理',nodes:[{name:'初试',interviewer:'甲'},{name:'复试',interviewer:'乙'}]};
  const input={candidates:[{id:'c-screen',name:'测试',phone:'13800000000',email:'screen@example.com',age:'28',highestEducation:'本科',experience:'5 年',company:'示例公司',currentTitle:'产品经理',city:'杭州',notes:'已电话沟通，候选人意向产品岗位，可两周内到岗，建议安排业务面试。',education:'普本'}],templates:[t],applications:[{id:'a-screen',candidateId:'c-screen',templateId:t.id,job:t.name,status:'进行中',resume:{id:file.id},rounds:[round('初试'),round('复试')],screening:{status:'pending',interviewer:'甲'},history:[]}]};
@@ -41,8 +41,8 @@ test('独立简历确认后可安排不同面试官，确认只进行一次，HR
  const declined=decideScreening(app,first,'declined','需补充经历');assert.equal(declined.reason,'需补充经历');assert.equal(canAccessResume({...app,screening:declined},first),false);assert.equal(app.status,'进行中');
  app.screening=decideScreening(app,first,'accepted');assert.throws(()=>decideScreening(app,first,'accepted'));
  const schedule=structuredClone(saved);Object.assign(schedule.applications[0].rounds[0],{interviewer:'甲',time:'2026-10-20T10:00',location:'https://example.com'});
- Object.assign(schedule.applications[0].rounds[1],{interviewer:'乙',time:'2026-10-21T10:00',location:'https://example.com'});
- const arranged=validateHRState(saved,schedule,names,[file],'HR');assert.equal(arranged.applications[0].rounds[1].interviewer,'乙');
+ const blocked=structuredClone(schedule);Object.assign(blocked.applications[0].rounds[1],{interviewer:'乙',time:'2026-10-21T10:00',location:'https://example.com'});assert.throws(()=>validateHRState(saved,blocked,names,[file],'HR'),/本轮简历审核/);
+ const arranged=validateHRState(saved,schedule,names,[file],'HR');assert.equal(arranged.applications[0].rounds[0].interviewer,'甲');
  const wrong=structuredClone(schedule);wrong.applications[0].rounds[0].interviewer='乙';assert.equal(validateHRState(saved,wrong,names,[file],'HR').applications[0].rounds[0].interviewer,'乙');
  const resend=structuredClone(saved);resend.applications[0].screening={status:'pending',interviewer:'乙'};const resent=validateHRState(saved,resend,names,[file],'HR');assert.equal(canAccessResume(resent.applications[0],first),false);assert.equal(canAccessResume(resent.applications[0],other),true);
  const ended={...app,status:'候选人退出'};assert.throws(()=>decideScreening(ended,first,'accepted'));assert.equal(canAccessResume(ended,first),false);

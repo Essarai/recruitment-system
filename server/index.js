@@ -1,3 +1,4 @@
+import {saveRoundReview} from './round-review.js';
 import {initializeFeishuBinding,mountFeishuBindingCallback,mountFeishuBinding} from './feishu-binding.js';
 import {initializeFeishu} from './feishu-store.js';
 import {startFeishuWorker} from './feishu-worker.js';
@@ -104,6 +105,7 @@ app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async
   res.json(visibleState(state,req.user,await users(pool),revision+1));
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}
 });
+app.patch('/api/applications/:appId/rounds/:roundId/review',express.json({limit:'8kb'}),async(req,res)=>{res.json(await saveRoundReview(pool,req.user,req.params.appId,req.params.roundId,req.body));});
 app.patch('/api/applications/:appId/rounds/:roundId/feedback',express.json({limit:'32kb'}),async(req,res)=>{
  res.json(await saveInterviewFeedback(pool,req.user,req.params.appId,req.params.roundId,req.body));
 });

@@ -1,3 +1,5 @@
+import {activateRoundReviews} from '../src/round-review.js';
+import {applicationCreatorName} from '../src/permissions.js';
 import {canManageApplication} from '../src/permissions.js';
 import {candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {normalizeScreening} from './screening.js';
@@ -68,13 +70,14 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(!['线上','线下'].includes(result.mode))throw Error('请选择面试方式');
    if(result.interviewer&&!interviewers.includes(result.interviewer)&&oldRound?.interviewer!==result.interviewer)throw Error('面试官账号不存在');
    if(oldRound&&oldRound.name!==result.name)throw Error('不能改写已有轮次名称');
+   if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.time||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
    if(oldRound?.scheduleEvents)result.scheduleEvents=structuredClone(oldRound.scheduleEvents);
    const changed=!oldRound||scheduleKeys.some(k=>oldRound[k]!==result[k])||(oldRound.cancelled&&!result.cancelled);
    if(changed){
     if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error(interviewers.includes(result.interviewer)?'不能为已冻结的面试官新增或修改安排':'该账号已不再是面试官，请重新指定面试官');
     if(old?.status!=='进行中'&&old)throw Error('应聘已结束，不能变更安排');
-    if(result.time){validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
+    if(result.time){if(index>0&&!oldRound)throw Error('新增轮次须先完成本轮简历审核，再安排面试');validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
     else if(oldRound?.time||result.location||result.focus)throw Error('请完整填写面试安排');
    }
    if(result.cancelled&&!oldRound)throw Error('新节点不能直接取消');
@@ -94,6 +97,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   });
   if(!next.rounds.length)throw Error('至少保留一个面试节点');
   if(old){const removed=old.rounds.filter(r=>!next.rounds.some(n=>n.id===r.id));if(removed.some(r=>!canDeleteInterviewRound(old,r)))throw Error('仅可删除未安排且无面评记录的轮次');const retained=old.rounds.filter(r=>next.rounds.some(n=>n.id===r.id));if(retained.some((r,i)=>next.rounds[i]?.id!==r.id))throw Error('不能调整已有面试轮次顺序');if(old.status!=='进行中'&&next.rounds.length!==old.rounds.length)throw Error('应聘已结束，不能加面');}
+  activateRoundReviews(next,applicationCreatorName(old||next,actorUser?[actorUser]:[]),now);
   const compare=x=>{const {history,...record}=x;return JSON.parse(JSON.stringify(record));};
   if(!old||!equal(compare(old),compare(next))){
    const changes=old?[...old.rounds.filter(r=>!next.rounds.some(n=>n.id===r.id)).map(r=>`删除面试轮次：${r.name}`),...next.rounds.flatMap(r=>{const before=old.rounds.find(x=>x.id===r.id);if(!before)return [`新增 ${r.name}`];const fields=[...scheduleKeys,'cancelled'];const updates=fields.filter(k=>before[k]!==r[k]).map(k=>`${k}: ${before[k]||'空'} → ${r[k]||'空'}`);if(r.feedback.status!==before.feedback.status)updates.push(`面评: ${before.feedback.status} → ${r.feedback.status}${r.feedback.returnReason?'；'+r.feedback.returnReason:''}`);return updates.length?[`${r.name}（${updates.join('；')}）`]:[];})]:[];

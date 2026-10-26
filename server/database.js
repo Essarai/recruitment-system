@@ -1,3 +1,4 @@
+import {activateRoundReviews,canReviewRound} from '../src/round-review.js';
 import {isRecruiter,canManageAccounts,applicationCreatorName} from '../src/permissions.js';
 import {terminateFailedApplication} from '../src/model.js';
 import {canReviewResume} from './screening.js';
@@ -24,6 +25,7 @@ export async function initializeDatabase(pool){
  const connection=await pool.getConnection();
  try{await connection.beginTransaction();await connection.query('SELECT id FROM recruitment_state WHERE id=1 FOR UPDATE');const [[{count}]]=await connection.query('SELECT COUNT(*) AS count FROM recruitment_users');if(!count){if(!process.env.INITIAL_ADMIN_PASSWORD)throw Error('INITIAL_ADMIN_PASSWORD is required to create the first administrator account');await connection.execute('INSERT INTO recruitment_users(id,username,name,role,password_hash) VALUES(?,?,?,?,?)',[randomUUID(),process.env.INITIAL_ADMIN_USERNAME||'admin',process.env.INITIAL_ADMIN_NAME||'管理员','admin',await hashPassword(process.env.INITIAL_ADMIN_PASSWORD)]);}const {state}=await readState(connection,true);let corrected=0;
  for(const app of state.applications)if(terminateFailedApplication(app))corrected++;
+ const reviewPeople=await users(connection);for(const app of state.applications)if(activateRoundReviews(app,applicationCreatorName(app,reviewPeople)))corrected++;
  if(corrected){await connection.execute('UPDATE recruitment_state SET payload=?,revision=revision+1 WHERE id=1',[JSON.stringify(state)]);console.log('Applied failed-application termination rule:',corrected);}
  await connection.commit();}catch(error){await connection.rollback();throw error;}finally{connection.release();}
 }
@@ -31,8 +33,8 @@ export async function readState(db,lock=false){const [[row]]=await db.query('SEL
 export async function users(db){const [rows]=await db.query('SELECT id,username,name,role,frozen FROM recruitment_users ORDER BY created_at,id');return rows;}
 export function visibleState(state,user,userList,revision,{screeningNotes=true}={}){
  if(isRecruiter(user))return {...structuredClone(state),applications:state.applications.map(a=>({...structuredClone(a),rounds:a.rounds.map(r=>({...structuredClone(r),feedback:['none','draft','returned'].includes(r.feedback.status)?{status:r.feedback.status,returnReason:r.feedback.returnReason||''}:r.feedback}))})),users:canManageAccounts(user)?userList:userList.filter(u=>u.role==='interviewer').map(({id,name,role,frozen})=>({id,name,role,frozen})),revision};
- const applications=state.applications.filter(a=>canReviewResume(a,user)||a.rounds.some(r=>r.time&&r.interviewer===user.name)).map(a=>({...a,...(screeningNotes?{recommendedBy:a.screening?.sentBy||applicationCreatorName(a,userList)}:{}),screening:canReviewResume(a,user)?{...a.screening,interviewsScheduled:a.rounds.some(r=>r.time&&!r.cancelled),firstInterviewScheduled:!!(a.rounds[0]?.time&&!a.rounds[0]?.cancelled),scheduledRoundName:a.rounds.find(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted')?.name||''}:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>r.time&&r.interviewer===user.name).map(r=>{const {feedbackVersions,scheduleEvents,...own}=r;return own;})}));
+ const applications=state.applications.filter(a=>canReviewResume(a,user)||a.rounds.some(r=>r.time&&r.interviewer===user.name||screeningNotes&&canReviewRound(a,r,user.name))).map(a=>({...a,...(screeningNotes?{recommendedBy:a.screening?.sentBy||applicationCreatorName(a,userList)}:{}),screening:canReviewResume(a,user)?{...a.screening,interviewsScheduled:a.rounds.some(r=>r.time&&!r.cancelled),firstInterviewScheduled:!!(a.rounds[0]?.time&&!a.rounds[0]?.cancelled),scheduledRoundName:a.rounds.find(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted')?.name||''}:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>r.time&&r.interviewer===user.name||screeningNotes&&canReviewRound(a,r,user.name)).map(r=>{const {feedbackVersions,scheduleEvents,...own}=r;return own;})}));
  const ids=new Set(applications.map(a=>a.candidateId));
- const reviewIds=new Set(screeningNotes?state.applications.filter(a=>canReviewResume(a,user)&&a.screening.status==='pending').map(a=>a.candidateId):[]);
+ const reviewIds=new Set(screeningNotes?state.applications.filter(a=>(canReviewResume(a,user)&&a.screening.status==='pending'||a.rounds.some(r=>r.review?.status==='pending'&&canReviewRound(a,r,user.name)))).map(a=>a.candidateId):[]);
  return {candidates:state.candidates.filter(c=>ids.has(c.id)).map(c=>{const {notes,resumes,createdBy,createdAt,...safe}=c;return {...safe,...(reviewIds.has(c.id)?{notes}:{} )};}),applications,templates:[],users:[user],revision};
 }

@@ -1,3 +1,4 @@
+import {reviewSourceValid} from '../src/round-review.js';
 import {hash} from './feishu-client.js';
 import {appointmentTime} from '../src/availability.js';
 export const parseJSON=value=>typeof value==='string'?JSON.parse(value):value;
@@ -11,6 +12,7 @@ export function feishuDesired(state,users,config,now=Date.now()){
    const who=person(a.screening.interviewer);items.push({id:'review:'+a.id,kind:'review',appId:a.id,roundId:null,active:true,userId:who?.userId||'',openId:who?.openId||'',name,job:a.job,title:`待审核简历｜${name}｜${a.job}`,screeningAt:a.screening.sentAt||'',calendarId:config.calendarId});
   }
   for(const r of a.rounds){
+   if(a.status==='进行中'&&!r.cancelled&&r.review?.status==='pending'&&reviewSourceValid(a,r)&&eligible(r.review.sentAt)){const who=person(r.review.interviewer);items.push({id:`round-review:${a.id}:${r.id}`,kind:'review',appId:a.id,roundId:r.id,reviewRoundName:r.name,active:true,userId:who?.userId||'',openId:who?.openId||'',name,job:a.job,title:`待审核简历｜${name}｜${a.job}｜${r.name}`,screeningAt:r.review.sentAt,calendarId:config.calendarId});}
    if(!r.time||r.feedback.status==='submitted')continue;
    const last=r.scheduleEvents?.at(-1)?.at||a.history?.find(h=>h.action?.startsWith('创建应聘'))?.at;
    if(!eligible(last))continue;
@@ -33,5 +35,5 @@ export function eventBody(task,origin){
  return {summary:task.title,description:`${task.focus?`考察重点：${task.focus}\n`:''}${task.mode==='线上'?`会议链接：${task.location}\n`:''}面试安排及面评请登录招聘系统：${origin}/?feishu=sync`,start_time:{timestamp:String(Math.floor(task.start/1000)),timezone:'Asia/Shanghai'},end_time:{timestamp:String(Math.floor(task.end/1000)),timezone:'Asia/Shanghai'},location:{name:task.location},visibility:'private',attendee_ability:task.allowAttendeeEdit?'can_modify_event':'can_see_others',need_notification:true};
 }
 export function reviewCard(task,origin,expired=false){
- return {config:{wide_screen_mode:true},header:{title:{tag:'plain_text',content:expired?'简历确认任务已更新':task.title},template:expired?'grey':'blue'},elements:[{tag:'div',text:{tag:'plain_text',content:expired?'该通知已失效，请以招聘系统中的最新任务为准。':'请查看简历和 HR 初步沟通结论后确认是否通过。简历确认与日程接受是两个独立操作。'}},...(!expired?[{tag:'action',actions:[{tag:'button',text:{tag:'plain_text',content:'查看并确认'},type:'primary',url:origin+'/?application='+encodeURIComponent(task.appId)}]}]:[])]};
+ return {config:{wide_screen_mode:true},header:{title:{tag:'plain_text',content:expired?'简历确认任务已更新':task.title},template:expired?'grey':'blue'},elements:[{tag:'div',text:{tag:'plain_text',content:expired?'该通知已失效，请以招聘系统中的最新任务为准。':task.reviewRoundName?`上一轮面试已通过，请审核${task.reviewRoundName}简历；不通过将直接结束本次应聘。通过后由 HR 安排面试。`:'请查看简历和 HR 初步沟通结论后确认是否通过。简历确认与日程接受是两个独立操作。'}},...(!expired?[{tag:'action',actions:[{tag:'button',text:{tag:'plain_text',content:'查看并确认'},type:'primary',url:origin+'/?application='+encodeURIComponent(task.appId)}]}]:[])]};
 }

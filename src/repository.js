@@ -66,3 +66,7 @@ export async function withdrawApplication(id){
  const result=await request('/applications/'+encodeURIComponent(id)+'/withdraw',{method:'POST',body:JSON.stringify({revision:baseline.revision,candidateIds:baseline.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-20)})});
  baseline=structuredClone(result);return result;
 }
+
+export async function decideRoundReview(appId,roundId,decision,reason=''){
+ const result=await request(`/applications/${encodeURIComponent(appId)}/rounds/${encodeURIComponent(roundId)}/review`,{method:'PATCH',body:JSON.stringify({revision:baseline.revision,decision,reason})});baseline=structuredClone(result);return result;
+}

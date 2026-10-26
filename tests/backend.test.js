@@ -147,3 +147,15 @@ test('only current pending resume reviewer sees HR communication notes in browse
  for(const status of ['accepted','declined','skipped']){s.applications[0].screening.status=status;assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,undefined);}
  s.applications[0].screening.status='pending';s.applications[0].status='未录用';assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,undefined);
 });
+
+test('HR 可删除未安排轮次，保留历史、顺序及至少一轮的限制',()=>{
+ const before=state();before.applications[0].rounds.push({...round('加面'),id:'extra'});
+ const remove=(s,id)=>{const next=visibleState(s,{role:'HR'},[],1);next.applications[0].rounds=next.applications[0].rounds.filter(r=>r.id!==id);return next;};
+ const validate=(s,next,actor=null)=>validateHRState(s,next,['面试官甲','面试官乙'],[file],'HR',undefined,actor);
+ const saved=validate(before,remove(before,'extra'));assert.equal(saved.applications[0].rounds.length,2);assert.match(saved.applications[0].history[0].action,/删除面试轮次：加面/);assert.equal(saved.applications[0].rounds[0].feedback.summary,'草稿内容');
+ for(const change of [{time:'2026-10-30T14:00'},{feedback:{status:'draft'}},{feedbackVersions:[{status:'submitted'}]},{scheduleEvents:[{type:'cancelled'}]}]){const s=structuredClone(before);Object.assign(s.applications[0].rounds[2],change);assert.throws(()=>validate(s,remove(s,'extra')),/仅可删除/);}
+ const ended=structuredClone(before);ended.applications[0].status='未录用';assert.throws(()=>validate(ended,remove(ended,'extra')),/仅可删除/);
+ const sole=structuredClone(before);sole.applications[0].rounds=[sole.applications[0].rounds[2]];assert.throws(()=>validate(sole,remove(sole,'extra')),/至少保留/);
+ const reordered=remove(before,'extra');reordered.applications[0].rounds.reverse();assert.throws(()=>validate(before,reordered),/顺序/);
+ before.applications[0].createdBy='owner';assert.throws(()=>validate(before,remove(before,'extra'),{id:'other',name:'HR',role:'HR'}),/仅创建/);
+});

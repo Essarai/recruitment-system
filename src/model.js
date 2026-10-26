@@ -151,3 +151,5 @@ export function newestApplications(applications){
  return applications.map(app=>{const times=(app.history||[]).filter(h=>h.action?.startsWith('创建应聘')).map(h=>Date.parse(h.at)).filter(Number.isFinite);return {app,time:times.length?Math.min(...times):-Infinity};})
   .sort((a,b)=>a.time===b.time?0:b.time-a.time).map(row=>row.app);
 }
+
+export const canDeleteInterviewRound=(app,r)=>app.status==='进行中'&&app.rounds.length>1&&!r.time&&!r.scheduleEvents?.length&&r.feedback.status==='none'&&!r.feedbackVersions?.length&&!r.feedback.transcript;

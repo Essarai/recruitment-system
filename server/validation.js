@@ -2,7 +2,7 @@ import {canManageApplication} from '../src/permissions.js';
 import {candidateMatches,sameCandidateContact} from '../src/intake.js';
 import {normalizeScreening} from './screening.js';
 import {isDeepStrictEqual as equal} from 'node:util';
-import {candidateDetails,validateHRNotes,validateCandidateIntake,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
+import {canDeleteInterviewRound,candidateDetails,validateHRNotes,validateCandidateIntake,profileFields,templateNodes,validateSchedule,endApplication,validateContacts,canCreateApplication,terminateFailedApplication,stopFutureRounds} from '../src/model.js';
 export function text(value,label,max=1000,required=false){if(value==null)value='';if(typeof value!=='string'||value.length>max||(required&&!value.trim()))throw Error(`${label}无效`);return value.trim();}
 function array(value,label,max=5000){if(!Array.isArray(value)||value.length>max)throw Error(`${label}无效`);return value;}
 function id(value){return text(value,'记录 ID',80,true);}
@@ -93,10 +93,10 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    return result;
   });
   if(!next.rounds.length)throw Error('至少保留一个面试节点');
-  if(old){preserve(old.rounds,next.rounds,'面试节点');if(old.rounds.some((r,i)=>next.rounds[i]?.id!==r.id))throw Error('不能调整已有面试轮次顺序');if(old.status!=='进行中'&&next.rounds.length!==old.rounds.length)throw Error('应聘已结束，不能加面');}
+  if(old){const removed=old.rounds.filter(r=>!next.rounds.some(n=>n.id===r.id));if(removed.some(r=>!canDeleteInterviewRound(old,r)))throw Error('仅可删除未安排且无面评记录的轮次');const retained=old.rounds.filter(r=>next.rounds.some(n=>n.id===r.id));if(retained.some((r,i)=>next.rounds[i]?.id!==r.id))throw Error('不能调整已有面试轮次顺序');if(old.status!=='进行中'&&next.rounds.length!==old.rounds.length)throw Error('应聘已结束，不能加面');}
   const compare=x=>{const {history,...record}=x;return JSON.parse(JSON.stringify(record));};
   if(!old||!equal(compare(old),compare(next))){
-   const changes=old?next.rounds.flatMap(r=>{const before=old.rounds.find(x=>x.id===r.id);if(!before)return [`新增 ${r.name}`];const fields=[...scheduleKeys,'cancelled'];const updates=fields.filter(k=>before[k]!==r[k]).map(k=>`${k}: ${before[k]||'空'} → ${r[k]||'空'}`);if(r.feedback.status!==before.feedback.status)updates.push(`面评: ${before.feedback.status} → ${r.feedback.status}${r.feedback.returnReason?'；'+r.feedback.returnReason:''}`);return updates.length?[`${r.name}（${updates.join('；')}）`]:[];}):[];
+   const changes=old?[...old.rounds.filter(r=>!next.rounds.some(n=>n.id===r.id)).map(r=>`删除面试轮次：${r.name}`),...next.rounds.flatMap(r=>{const before=old.rounds.find(x=>x.id===r.id);if(!before)return [`新增 ${r.name}`];const fields=[...scheduleKeys,'cancelled'];const updates=fields.filter(k=>before[k]!==r[k]).map(k=>`${k}: ${before[k]||'空'} → ${r[k]||'空'}`);if(r.feedback.status!==before.feedback.status)updates.push(`面评: ${before.feedback.status} → ${r.feedback.status}${r.feedback.returnReason?'；'+r.feedback.returnReason:''}`);return updates.length?[`${r.name}（${updates.join('；')}）`]:[];})]:[];
    next.history=[{at:now,actor,action:!old?(next.screening?.status==='skipped'?'创建应聘（无需简历确认）':'创建应聘'):old.status!==next.status?`结束应聘：${next.status}；${next.reason}`:(!equal(old?.screening,next.screening)?`推送简历给 ${next.screening?.interviewer||'待指定'}`:changes.join('；'))||'更新应聘记录'},...next.history];
   }
   if(old?.status==='进行中'&&['未录用','候选人退出'].includes(next.status))stopFutureRounds(next,now);

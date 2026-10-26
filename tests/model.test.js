@@ -123,3 +123,9 @@ test('候选人最高学历独立于学历背景，所有候选人资料必填�
 test('工作经验展示补齐数字单位，兼容已带单位、应届和描述文本',async()=>{
  const {workExperienceLabel}=await import('../src/model.js');assert.equal(workExperienceLabel('5'),'5 年工作经验');assert.equal(workExperienceLabel('3.5'),'3.5 年工作经验');assert.equal(workExperienceLabel('5年'),'5年工作经验');assert.equal(workExperienceLabel('3 年以上'),'3 年以上工作经验');assert.equal(workExperienceLabel('应届毕业生'),'工作经验：应届毕业生');assert.equal(workExperienceLabel('5 年工作经验'),'5 年工作经验');assert.equal(workExperienceLabel(''),'');
 });
+
+test('HR 结束前校验包括未来安排、未交/草稿/待提交，不包括已取消与未安排轮次',async()=>{
+ const {validateHREndApplication}=await import('../src/model.js');
+ for(const status of ['none','draft','returned']){const a=seed().applications[0];a.rounds[0].time='2099-01-01T10:00';a.rounds[0].feedback.status=status;assert.throws(()=>validateHREndApplication(a),/面评未正式提交/);}
+ const a=seed().applications[0];for(const r of a.rounds)if(r.time)r.cancelled=true;assert.doesNotThrow(()=>validateHREndApplication(a));
+});

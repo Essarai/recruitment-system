@@ -61,6 +61,10 @@ export function submitFeedback(app,r,person,data,completed){
  if(!completed||!data.summary.trim()||!['建议通过','建议不通过','建议加面','待定'].includes(data.conclusion)) throw Error('请填写综合评价、建议结论，并确认面试已完成');
  return {...data,status:'submitted',submittedAt:new Date().toISOString(),author:person,returnReason:r.feedback.returnReason||''};
 }
+export function validateHREndApplication(app){
+ const outstanding=app.rounds.filter(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted');
+ if(outstanding.length)throw Error(`仍有 ${outstanding.length} 份面评未正式提交（${outstanding.map(r=>r.name).join('、')}），请先完成面评后再结束流程`);
+}
 export function endApplication(app,status,reason){
  if(app.status!=='进行中'||!results.slice(1).includes(status)||!reason.trim()) throw Error('请选择最终结果并填写原因');
  const ended={...app,status,reason,endedAt:new Date().toISOString(),rounds:app.rounds.map(r=>({...r}))};

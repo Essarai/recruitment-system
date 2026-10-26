@@ -170,3 +170,14 @@ test('面试官可见推荐 HR，优先实际推送人，旧记录回退发起�
  s.applications[0].history=[];assert.equal(visibleState(s,person,[],1).applications[0].recommendedBy,'未记录');
  assert.equal(visibleState(s,person,[],1,{screeningNotes:false}).applications[0].recommendedBy,undefined);
 });
+
+test('HR 手动结束流程必须清零待提交面评，含未来安排和草稿，不能同次取消来绕过',()=>{
+ const names=['面试官甲','面试官乙'];
+ for(const status of ['公司决定录用','未录用','候选人退出']){
+  const before=state();const next=visibleState(before,{role:'HR'},[],1);next.applications[0].status=status;next.applications[0].reason='HR 手动结束';
+  assert.throws(()=>validateHRState(before,next,names,[file],'HR'),/初试.*先完成面评/);
+  next.applications[0].rounds[0].cancelled=true;assert.throws(()=>validateHRState(before,next,names,[file],'HR'),/面评未正式提交/);
+ }
+ const before=state();before.applications[0].rounds[0].feedback={status:'submitted',summary:'通过',conclusion:'建议通过'};const complete=visibleState(before,{role:'HR'},[],1);complete.applications[0].status='公司决定录用';complete.applications[0].reason='已完成全部面评';assert.equal(validateHRState(before,complete,names,[file],'HR').applications[0].status,'公司决定录用');
+ const unscheduled=state();unscheduled.applications[0].rounds[0].time='';unscheduled.applications[0].rounds[0].feedback={status:'none'};const ended=visibleState(unscheduled,{role:'HR'},[],1);ended.applications[0].status='候选人退出';ended.applications[0].reason='候选人退出';assert.equal(validateHRState(unscheduled,ended,names,[file],'HR').applications[0].status,'候选人退出');
+});

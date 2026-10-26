@@ -1,5 +1,16 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {applicationWait} from '../src/application-wait.js';
 const now=Date.parse('2026-10-26T15:00:00+08:00'),make=rounds=>({status:'进行中',rounds});
+test('初始简历待确认从最早有效创建记录计时，面试后优先按面试结束计算',()=>{
+ const a={...make([]),screening:{status:'pending'},history:[{action:'更新资料',at:'2026-10-20T00:00:00Z'},{action:'创建应聘并推送简历',at:'2026-10-26T04:30:00Z'},{action:'创建应聘',at:'bad'},{action:'创建应聘',at:'2026-10-26T04:00:00Z'}]};
+ const wait=applicationWait(a,now);assert.equal(wait.text,'3小时');assert.equal(wait.source,'application');assert.equal(wait.since,Date.parse('2026-10-26T04:00:00Z'));
+ a.rounds=[{name:'初试',time:'2026-10-26T13:00',duration:60}];assert.equal(applicationWait(a,now).text,'1小时');assert.equal(applicationWait(a,now).source,'interview');
+ a.rounds=[];a.status='未录用';a.endedAt='2026-10-26T05:00:00Z';assert.equal(applicationWait(a,now).text,'1小时');
+});
+test('待确认缺失、无效或未来创建时间不猜测，其他无面试阶段仍未知',()=>{
+ const a={...make([]),screening:{status:'pending'}};assert.equal(applicationWait(a,now),null);
+ for(const at of ['bad','2026-10-27T00:00:00Z']){a.history=[{action:'创建应聘',at}];assert.equal(applicationWait(a,now),null);}
+ a.history=[{action:'创建应聘',at:'2026-10-26T06:45:00Z'}];assert.equal(applicationWait(a,now).text,'0小时');a.screening.status='accepted';assert.equal(applicationWait(a,now),null);
+});
 test('等待从最近一轮排期结束计算，未交/草稿不改变计算，默认60分钟且使用北京时间',()=>{for(const status of ['none','draft','submitted']){const a=make([{name:'初试',time:'2026-10-26T10:00',feedback:{status}}]);const before=structuredClone(a),wait=applicationWait(a,now);assert.equal(wait.text,'4小时');assert.equal(wait.since,Date.parse('2026-10-26T11:00+08:00'));assert.deepEqual(a,before);}});
 test('选最近已结束而非数组最后一轮，忽略未安排/取消/未来/无效日期',()=>{const a=make([{name:'复试',time:'2026-10-26T13:00',duration:30},{name:'终面',time:'2026-10-27T10:00'},{name:'初试',time:'2026-10-25T10:00'},{name:'取消',time:'2026-10-26T14:00',duration:15,cancelled:true},{name:'无效',time:'bad'},{name:'未排',time:''}]);const wait=applicationWait(a,now);assert.equal(wait.roundName,'复试');assert.equal(wait.text,'1小时');assert.equal(applicationWait(make([{time:'2026-10-26T14:30',duration:60}]),now),null);});
 test('结束流程冻结等待时长，缺失结束时间不推算，统一向下取整显示小时',()=>{const a=make([{name:'初试',time:'2026-10-24T10:00:00+08:00',duration:60}]);assert.equal(applicationWait(a,now).text,'52小时');a.status='未录用';assert.equal(applicationWait(a,now),null);a.endedAt='2026-10-25T11:15:00+08:00';assert.equal(applicationWait(a,now).text,'24小时');const b=make([{time:'2026-10-26T14:00',duration:60}]);assert.equal(applicationWait(b,now).text,'0小时');assert.equal(applicationWait(b,now+15*60000).text,'0小时');});

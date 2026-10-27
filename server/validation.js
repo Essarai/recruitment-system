@@ -32,7 +32,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  });
  unique(candidates,'候选人');preserve(previous.candidates,candidates,'候选人');
  for(const candidate of candidates)if(!oldCandidates.has(candidate.id)&&candidateMatches(candidates,candidate).some(other=>sameCandidateContact(other,candidate)))throw Error('手机号或邮箱已存在，请打开原候选人档案并更新简历');
- if(actorUser?.role==='HR'&&!equal(previous.templates,input.templates))throw Object.assign(Error('仅管理员可以新建或修改流程模板'),{status:403});
+ if(actorUser?.role==='HR'&&!equal(previous.templates,input.templates))throw Object.assign(Error('仅管理员可以维护流程模板'),{status:403});
  const templates=actorUser?.role==='HR'?structuredClone(previous.templates):array(input.templates,'流程模板',100).map(t=>{
   const nodes=templateNodes(array(t.nodes,'流程节点',50)),old=previous.templates.find(x=>x.id===t.id);
   if(nodes.some((n,i)=>n.interviewer&&!interviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('请选择有效的默认面试官');
@@ -40,7 +40,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   const reviewer=text(t.reviewer,'默认简历确认人',100);if(reviewer&&old?.reviewer!==reviewer&&(!interviewers.includes(reviewer)||!activeInterviewers.includes(reviewer)))throw Error('请选择启用的简历确认人');
   return {id:id(t.id),name:text(t.name,'流程名称',100,true),jd:text(t.jd,'JD',20000),...(reviewer?{reviewer}:{}),nodes};
  });
- unique(templates,'模板');preserve(previous.templates,templates,'模板');
+ unique(templates,'模板');if(actorUser?.role!=='admin')preserve(previous.templates,templates,'流程模板');
  const roundIds=new Set();const newApplicants=new Set();
  const applications=array(input.applications,'应聘记录').map(a=>{
   const old=previous.applications.find(x=>x.id===a.id);const candidateId=id(a.candidateId);

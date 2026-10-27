@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {createFeishuClient,feishuEnvironment,hash} from './feishu-client.js';
-import {feishuDesired,scheduleSignature,remoteSchedule,eventBody,reviewCard} from './feishu-model.js';
+import {feishuDesired,reconcileFeishuJobs,scheduleSignature,remoteSchedule,eventBody,reviewCard} from './feishu-model.js';
 import {readFeishuConfig,readJobs,jobRow} from './feishu-store.js';
 import {readState,users} from './database.js';
 const eventPath=remote=>'/calendar/v4/calendars/'+encodeURIComponent(remote.calendarId)+'/events/'+encodeURIComponent(remote.eventId);
@@ -14,6 +14,10 @@ export async function syncFeishuJob(job,client,origin,checkpoint){
   if(!t.openId)throw Error('确认人尚未绑定有效的飞书账号');
   if(!r.messageId){const value=await client.call('/im/v1/messages?receive_id_type=open_id',{method:'POST',body:{receive_id:t.openId,msg_type:'interactive',uuid:r.uuid,content:JSON.stringify(reviewCard(t,origin))}});if(!value.message_id)throw Error('飞书未返回通知 ID');r.messageId=value.message_id;r.openId=t.openId;r.reviewEpoch=t.screeningAt;await checkpoint(r);}
   return {...r,closed:false};
+ }
+ if(t.calendarSource==='external'){
+  if(r.eventId&&!r.closed)await client.call(eventPath(r),{method:'DELETE'});
+  return {...r,closed:true,proposal:null,rsvp:'',checkedAt:null};
  }
  if(r.eventId&&(r.calendarId!==t.calendarId||r.openId!==t.openId)){
   await client.call(eventPath(r),{method:'DELETE'});r.eventId=null;r.attendeeId=null;r.proposal=null;r.createKey=randomUUID();await checkpoint(r);
@@ -34,7 +38,7 @@ export async function syncFeishuJob(job,client,origin,checkpoint){
  return r;
 }
 export async function observeFeishuJob(job,client){
- const r={...job.remote};if(!r.eventId||r.closed||!job.desired.active)return r;
+ const r={...job.remote};if(job.desired.calendarSource==='external'||!r.eventId||r.closed||!job.desired.active)return r;
  const result=await client.call(eventPath(r));const event=result.event;if(!event)throw Error('无法读取飞书日程');
  if(event.status==='cancelled')r.proposal={cancelled:true,baseHash:job.desired_hash,remoteHash:hash({eventId:r.eventId,cancelled:true}),observedAt:new Date().toISOString()};
  else{
@@ -52,16 +56,9 @@ export function startFeishuWorker(pool,{env=process.env,client=createFeishuClien
    conn=await pool.getConnection();const [[lock]]=await conn.query("SELECT GET_LOCK('recruitment-feishu-worker',0) AS acquired");if(!lock.acquired)return;locked=true;
    await conn.beginTransaction();const {state,revision:stateRevision}=await readState(conn,true),userList=await users(conn),{config,revision:configRevision}=await readFeishuConfig(conn);
    if(!config.enabled){await conn.commit();return;}
-   const existing=(await readJobs(conn)).filter(job=>!config.pilotUserId||job.desired.userId===config.pilotUserId),wanted=feishuDesired(state,userList,config),map=new Map(wanted.map(t=>[t.id,t]));
-   for(const old of existing)if(!map.has(old.id)){
-    const a=state.applications.find(a=>a.id===old.application_id),round=a?.rounds.find(r=>r.id===old.round_id);
-    // Completed appointments remain historical calendar records; only future/unsubmitted cancellations propagate.
-    if(old.kind==='round'&&round?.feedback.status==='submitted')continue;
-    if(old.kind==='round'&&old.desired.end<Date.now()&&a?.status==='进行中'&&!round?.cancelled)continue;
-    map.set(old.id,{...old.desired,active:false});
-   }
+   const existing=(await readJobs(conn)).filter(job=>!config.pilotUserId||job.desired.userId===config.pilotUserId),wanted=reconcileFeishuJobs(state,existing,feishuDesired(state,userList,config));
    const previous=new Map(existing.map(j=>[j.id,j]));
-   for(const t of map.values()){
+   for(const t of wanted){
     const fingerprint=hash(t),old=previous.get(t.id);
     if(old?.desired_hash===fingerprint)continue;
     const remote={...(old?.remote||{uuid:randomUUID(),createKey:randomUUID()})};if(old?.desired_hash!==fingerprint)delete remote.proposal;if(old?.remote.closed&&t.active)remote.createKey=randomUUID();

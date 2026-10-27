@@ -53,13 +53,14 @@ export function mountFeishuRoutes(app,{pool,env=process.env,client=createFeishuC
  });
  app.get('/api/feishu/jobs',async(req,res)=>{
   const [{state},jobs,{config}]=await Promise.all([readState(pool),readJobs(pool),readFeishuConfig(pool)]);const apps=new Map(state.applications.map(a=>[a.id,a]));
-  const rows=jobs.filter(j=>req.user.role==='admin'||isRecruiter(req.user)&&apps.has(j.application_id)||req.user.role==='interviewer'&&j.desired.userId===req.user.id).filter(j=>!req.query.appId||j.application_id===req.query.appId).map(j=>({id:j.id,appId:j.application_id,roundId:j.round_id,title:j.desired.title,kind:j.kind,status:j.status,error:j.error,updatedAt:j.updated_at,active:j.desired.active,rsvp:j.remote.rsvp||'',checkedAt:j.remote.checkedAt||null,proposal:j.remote.proposal||null,canManage:canManageApplication(req.user,apps.get(j.application_id)),userId:j.desired.userId}));
+  const rows=jobs.filter(j=>req.user.role==='admin'||isRecruiter(req.user)&&apps.has(j.application_id)||req.user.role==='interviewer'&&j.desired.userId===req.user.id).filter(j=>!req.query.appId||j.application_id===req.query.appId).map(j=>{const a=apps.get(j.application_id),external=j.kind==='round'&&a?.rounds.find(r=>r.id===j.round_id)?.calendarSource==='external';return {id:j.id,appId:j.application_id,roundId:j.round_id,title:j.desired.title,kind:j.kind,status:j.status,error:j.error,updatedAt:j.updated_at,active:external?false:j.desired.active,rsvp:external?'':j.remote.rsvp||'',checkedAt:external?null:j.remote.checkedAt||null,proposal:external?null:j.remote.proposal||null,canManage:canManageApplication(req.user,a),userId:j.desired.userId,...(external?{calendarSource:'external',calendarCleanupPending:!!j.remote.eventId&&!j.remote.closed}:{})};});
   res.json({enabled:config.enabled,ready:feishuEnvironment(env).ready,rows});
  });
  app.post('/api/feishu/jobs/:id/retry',express.json({limit:'1kb'}),async(req,res)=>{
   const conn=await pool.getConnection();try{await conn.beginTransaction();const {state}=await readState(conn,true),[people]=await conn.query('SELECT id,name,role,frozen FROM recruitment_users WHERE id=? FOR UPDATE',[req.user.id]);const actor=people[0];const [[row]]=await conn.execute('SELECT * FROM recruitment_feishu_jobs WHERE id=? FOR UPDATE',[req.params.id]);
    if(!row||!actor||actor.frozen||!canManageApplication(actor,state.applications.find(a=>a.id===row.application_id)))throw denied('无权重试此同步');
-   if(parseJSON(row.remote).proposal)throw Error('请先接受或拒绝飞书改期请求');
+   const target=state.applications.find(a=>a.id===row.application_id)?.rounds.find(r=>r.id===row.round_id);
+   if(target?.calendarSource!=='external'&&parseJSON(row.remote).proposal)throw Error('请先接受或拒绝飞书改期请求');
    await conn.execute("UPDATE recruitment_feishu_jobs SET status='pending',next_at=UTC_TIMESTAMP(),attempts=0,error='' WHERE id=?",[row.id]);await conn.commit();res.json({ok:true});
   }catch(e){await conn.rollback();throw e;}finally{conn.release();}
  });
@@ -69,7 +70,7 @@ export function mountFeishuRoutes(app,{pool,env=process.env,client=createFeishuC
    await conn.beginTransaction();const {state,revision}=await readState(conn,true),people=await users(conn),actor=people.find(u=>u.id===req.user.id);
    const [[row]]=await conn.execute('SELECT * FROM recruitment_feishu_jobs WHERE id=? FOR UPDATE',[req.params.id]);if(!row)throw Error('同步记录不存在');const job=jobRow(row),a=state.applications.find(a=>a.id===job.application_id),r=a?.rounds.find(r=>r.id===job.round_id),proposal=job.remote.proposal;
    if(!actor||actor.frozen||!canManageApplication(actor,a))throw denied('仅发起该应聘的 HR 或管理员可处理');
-   if(!r||a.status!=='进行中'||r.feedback.status==='submitted'||!proposal)throw Error('该改期请求已失效');
+   if(!r||r.calendarSource==='external'||a.status!=='进行中'||r.feedback.status==='submitted'||!proposal)throw Error('该改期请求已失效');
    const {config}=await readFeishuConfig(conn),current=feishuDesired(state,people,{...config,backfill:true}).find(t=>t.id===job.id);
    if(!current||hash(current)!==proposal.baseHash||proposal.remoteHash!==req.body.remoteHash)throw Object.assign(Error('安排或飞书请求已更新，请刷新后重试'),{status:409});
    const remote={...job.remote};delete remote.proposal;

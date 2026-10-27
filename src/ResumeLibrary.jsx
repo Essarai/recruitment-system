@@ -1,3 +1,5 @@
+import {MobileSearch} from './MobileSearch';
+import closeIcon from '@material-design-icons/svg/outlined/close.svg';
 import {CandidateBrief} from './CandidateBrief';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
@@ -14,7 +16,7 @@ function CommunicationNote({notes}){
 
 function MoreArchiveActions({children}){
  const id=useId(),menu=useRef(null),[position,setPosition]=useState({left:0,top:0}),[expanded,setExpanded]=useState(false);
- return <><button type="button" className="text-button library-more-trigger" popoverTarget={id} aria-expanded={expanded} aria-controls={id} onClick={e=>{const box=e.currentTarget.getBoundingClientRect(),width=Math.min(400,window.innerWidth-32);setPosition({left:Math.max(16,Math.min(box.right-width,window.innerWidth-width-16)),top:box.bottom+10+90>window.innerHeight?Math.max(16,box.top-90):box.bottom+10});}}>更多操作<span aria-hidden="true">⌄</span></button><div ref={menu} id={id} popover="auto" className="library-more-popover" style={position} onToggle={e=>setExpanded(e.newState==='open')} onClick={e=>{if(e.target.closest('button,a'))menu.current.hidePopover();}}>{children}</div></>;
+ return <><button type="button" className="text-button library-more-trigger" popoverTarget={id} aria-expanded={expanded} aria-controls={id} onClick={e=>{const box=e.currentTarget.getBoundingClientRect(),width=Math.min(400,window.innerWidth-32);setPosition({left:Math.max(16,Math.min(box.right-width,window.innerWidth-width-16)),top:box.bottom+10+90>window.innerHeight?Math.max(16,box.top-90):box.bottom+10});}}>更多操作<span aria-hidden="true">⌄</span></button><div ref={menu} id={id} popover="auto" className="library-more-popover" style={position} onToggle={e=>setExpanded(e.newState==='open')} onClick={e=>{if(e.target.closest('button,a'))menu.current.hidePopover();}}><div className="mobile-menu-heading"><strong>档案操作</strong><button className="icon-btn" aria-label="关闭档案操作"><img className="icon" src={closeIcon} alt=""/></button></div>{children}</div></>;
 }
 
 export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
@@ -26,6 +28,7 @@ export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
 
  return <section className="resume-library">
   <div className="title-row"><div><h1>简历库</h1><p className="muted">顶部支持组合检索，例如“阿里 + 2年经验”；多个条件同时满足。</p></div><button className="primary" onClick={()=>open('import')}>导入简历</button></div>
+  <MobileSearch value={query} onChange={onQueryChange} placeholder="例如：阿里 + 2年经验"/>
   {terms.length>0&&<div className="resume-query-summary">{terms.map((term,index)=><button className="search-condition" type="button" key={`${index}-${term.token}`} aria-label={`移除条件 ${term.label}`} onClick={()=>removeTerm(index)}>{term.label}<span aria-hidden="true">×</span></button>)}<small className="muted" role="status">匹配 {result?.total??'…'} / {result?.libraryTotal??'…'} 人</small><button className="text-button" onClick={()=>onQueryChange('')}>清空条件</button></div>}
   {error&&<div className="error" role="alert">{error}<button className="text-button" onClick={retry}>重试</button></div>}
   {loading&&<p className="muted" role="status">正在查询简历…</p>}
@@ -50,7 +53,7 @@ export function CandidateArchive({candidate:c,data,open,manage,back,date}){
  return <section className="candidate-archive">
   <button className="text-button back" onClick={back}>返回简历库</button>
   <div className="title-row"><div><h1>{c.name}</h1><p className="muted">候选人档案 · {apps.length} 次应聘 · {files.length} 份简历版本</p></div><div className="actions"><button onClick={()=>open('candidate',{candidateId:c.id})}>编辑资料</button><button onClick={()=>open('candidateResume',{candidateId:c.id})}>更新简历</button>{canCreateApplication(data.applications,c.id)&&<button onClick={()=>open('createApplication',{candidateId:c.id})}>{apps.length?'重新捞起':'创建应聘'}</button>}</div></div>
-  <section className="candidate-profile" aria-label="候选人档案资料"><dl>{[['phone','手机号'],['email','邮箱'],...profileFields].map(([key,label])=><div key={key}><dt>{label}</dt><dd>{key==='education'&&!educationOptions.includes(c.education)?'待补充分类':key==='experience'?workExperienceLabel(c[key])||'待补充':c[key]||'待补充'}</dd></div>)}</dl><div className="candidate-notes"><span>HR 前置沟通记录</span><p>{c.notes||'暂无备注'}</p></div></section>
+  <section className="candidate-profile" aria-label="候选人档案资料"><dl>{[['phone','手机号'],['email','邮箱'],...profileFields].map(([key,label])=><div key={key}><dt>{label}</dt><dd>{key==='phone'&&c.phone?<a href={'tel:'+c.phone}>{c.phone}</a>:key==='email'&&c.email?<a href={'mailto:'+c.email}>{c.email}</a>:key==='education'&&!educationOptions.includes(c.education)?'待补充分类':key==='experience'?workExperienceLabel(c[key])||'待补充':c[key]||'待补充'}</dd></div>)}</dl><div className="candidate-notes"><span>HR 前置沟通记录</span><p>{c.notes||'暂无备注'}</p></div></section>
   <div className="section-heading"><h2>简历版本</h2><span className="muted">更新简历不会改写已有应聘附件</span></div>
   <PaginatedList items={files} resetKey={c.id} label="简历版本">{rows=><div className="resume-versions">{rows.map((file,i)=><div className="resume-version" key={file.id}><ResumeLink app={{resume:file}} className="text-button">{file.name}</ResumeLink><span className="muted">{file.id===files[0]?.id?'最近版本 · ':''}{file.uploadedAt?date(file.uploadedAt):'历史简历'}</span></div>)}</div>}</PaginatedList>
   <div className="section-heading"><h2>历次应聘与简历</h2><span className="muted archive-hint">需要安排面试或记录结果时，前往应聘列表处理</span></div>

@@ -14,6 +14,7 @@ const scheduleKeys=['interviewer','time','mode','location','focus','duration','c
 export function validateHRState(previous,input,interviewers,files,actor,activeInterviewers=interviewers,actorUser=null){
  const now=new Date().toISOString();
  const oldCandidates=new Map(previous.candidates.map(c=>[c.id,c]));
+ const oldApplications=new Map(previous.applications.map(a=>[a.id,a]));
  const candidates=array(input.candidates,'候选人',20000).map(c=>{
   const old=oldCandidates.get(c.id);if(old&&equal(old,c))return structuredClone(old);
   const {resumes,...profile}=c,{resumes:oldResumes,...oldProfile}=old||{};
@@ -34,7 +35,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  for(const candidate of candidates)if(!oldCandidates.has(candidate.id)&&candidateMatches(candidates,candidate).some(other=>sameCandidateContact(other,candidate)))throw Error('手机号或邮箱已存在，请打开原候选人档案并更新简历');
  if(actorUser?.role==='HR'&&!equal(previous.templates,input.templates))throw Object.assign(Error('仅管理员可以维护流程模板'),{status:403});
  const templates=actorUser?.role==='HR'?structuredClone(previous.templates):array(input.templates,'流程模板',100).map(t=>{
-  const nodes=templateNodes(array(t.nodes,'流程节点',50)),old=previous.templates.find(x=>x.id===t.id);
+  const old=previous.templates.find(x=>x.id===t.id);if(old&&equal(old,t))return structuredClone(old);
+  const nodes=templateNodes(array(t.nodes,'流程节点',50));
   if(nodes.some((n,i)=>n.interviewer&&!interviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('请选择有效的默认面试官');
   if(nodes.some((n,i)=>n.interviewer&&!activeInterviewers.includes(n.interviewer)&&old?.nodes[i]?.interviewer!==n.interviewer))throw Error('不能将已冻结账号设为默认面试官');
   const reviewer=text(t.reviewer,'默认简历确认人',100);if(reviewer&&old?.reviewer!==reviewer&&(!interviewers.includes(reviewer)||!activeInterviewers.includes(reviewer)))throw Error('请选择启用的简历确认人');
@@ -43,7 +45,11 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
  unique(templates,'模板');if(actorUser?.role!=='admin')preserve(previous.templates,templates,'流程模板');
  const roundIds=new Set();const newApplicants=new Set();
  const applications=array(input.applications,'应聘记录').map(a=>{
-  const old=previous.applications.find(x=>x.id===a.id);const candidateId=id(a.candidateId);
+  const old=oldApplications.get(a.id);const candidateId=id(a.candidateId);
+  if(old&&equal(old,a)){
+   for(const r of old.rounds){if(roundIds.has(r.id))throw Error('面试节点 ID 不能重复');roundIds.add(r.id);}
+   return structuredClone(old);
+  }
   if(old&&actorUser&&!canManageApplication(actorUser,old)){
    const expected=structuredClone(old);for(const r of expected.rounds)if(['none','draft','returned'].includes(r.feedback.status))r.feedback={status:r.feedback.status,returnReason:r.feedback.returnReason||''};
    const comparable=value=>{const {history,...rest}=value;return JSON.parse(JSON.stringify(rest));};

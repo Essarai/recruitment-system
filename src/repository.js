@@ -18,6 +18,12 @@ export const login=(username,password)=>request('/login',{method:'POST',body:JSO
 export const logout=()=>request('/logout',{method:'POST'});
 export const createUser=user=>request('/users',{method:'POST',body:JSON.stringify(user)});
 export const changePassword=password=>request('/password',{method:'POST',body:JSON.stringify(password)});
+export function stateChanges(before,after){
+ return Object.fromEntries(['candidates','applications','templates'].map(key=>{
+  const old=new Map((before[key]||[]).map(record=>[record.id,record])),next=new Map((after[key]||[]).map(record=>[record.id,record]));
+  return [key,[...new Set([...old.keys(),...next.keys()])].flatMap(id=>JSON.stringify(old.get(id))===JSON.stringify(next.get(id))?[]:[{id,before:old.get(id)??null,after:next.get(id)??null}])];
+ }));
+}
 export async function save(next,onProgress=()=>{},feedbackTarget=null,candidateTarget=null){
  let result;
  if(candidateTarget&&isRecruiter(currentUser)){
@@ -35,7 +41,7 @@ export async function save(next,onProgress=()=>{},feedbackTarget=null,candidateT
   for(const candidate of payload.candidates)for(let i=0;i<(candidate.resumes||[]).length;i++){const version=candidate.resumes[i];if(version.file instanceof File){onProgress('正在上传简历…');candidate.resumes[i]=await request('/resumes?name='+encodeURIComponent(version.file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:version.file});}}
   for(const app of payload.applications){if(app.resume?.file instanceof File){const file=app.resume.file;onProgress('正在上传简历…');app.resume=await request('/resumes?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});}}
   onProgress('正在保存记录…');
-  result=await request('/state',{method:'POST',body:JSON.stringify(payload)});
+  result=await request('/state',{method:'POST',body:JSON.stringify({revision:baseline.revision,changes:stateChanges(baseline,payload),partialCandidates:payload.partialCandidates===true,loadedCandidateIds:payload.loadedCandidateIds||[]})});
  }else{
   const changed=[];
   if(feedbackTarget){const app=next.applications.find(a=>a.id===feedbackTarget.appId),round=app?.rounds.find(r=>r.id===feedbackTarget.roundId);if(!round)throw Error('面评记录不存在，请刷新后重试');changed.push({app,round});}

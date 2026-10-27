@@ -1,4 +1,5 @@
 import {saveCandidateChange} from './candidate-save.js';
+import {saveRecruitmentState} from './state-changes.js';
 import {saveHRProgression} from './hr-progression.js';
 import {saveReviewTermination} from './review-termination.js';
 import {saveRoundReview} from './round-review.js';
@@ -7,8 +8,8 @@ import {initializeFeishu} from './feishu-store.js';
 import {startFeishuWorker} from './feishu-worker.js';
 import {mountFeishuCallback,mountFeishuRoutes} from './feishu-routes.js';
 import {mountWithdrawal} from './withdrawal.js';
-import {mountAvailability,validateAvailabilityBookings} from './availability.js';
-import {mountResumeLibrary,compactCandidates,mergePartialCandidates} from './resume-library.js';
+import {mountAvailability} from './availability.js';
+import {mountResumeLibrary,compactCandidates} from './resume-library.js';
 import {mountRecruitmentDashboard} from './recruitment-dashboard.js';
 import {directoryVersion,readVersion} from './state-version.js';
 import {isRecruiter,canManageAccounts} from '../src/permissions.js';
@@ -26,7 +27,7 @@ import {fileURLToPath} from 'node:url';
 import {pool,s3,bucket,initializeStorage} from './infrastructure.js';
 import {initializeDatabase,readState,users,visibleState} from './database.js';
 import {hashPassword,verifyPassword,tokenHash,sessionToken,getSessionCookie,setSessionCookie} from './auth.js';
-import {validateHRState,text} from './validation.js';
+import {text} from './validation.js';
 import {MAX_FILE,validateResume,signedResumeAccess,storePrivateFile} from './files.js';
 import {terminateFailedApplication} from '../src/model.js';
 const app=express();app.disable('x-powered-by');if(process.env.NODE_ENV==='production')app.set('trust proxy',1);
@@ -64,7 +65,7 @@ app.post('/api/password',express.json({limit:'4kb'}),async(req,res)=>{
  const hash=await hashPassword(req.body.password);const conn=await pool.getConnection();try{await conn.beginTransaction();await conn.execute('UPDATE recruitment_users SET password_hash=? WHERE id=?',[hash,req.user.id]);await conn.execute('DELETE FROM recruitment_sessions WHERE user_id=?',[req.user.id]);await conn.execute('DELETE FROM recruitment_mcp_tokens WHERE user_id=?',[req.user.id]);await conn.commit();}catch(error){await conn.rollback();throw error;}finally{conn.release();}res.clearCookie('recruitment_session',{path:'/api'});res.json({ok:true});
 });
 app.get('/api/state/version',async(req,res)=>res.json({...await readVersion(pool),userId:req.user.id}));
-app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool),userList=await users(pool);res.json({user:req.user,data:req.query.compact==='1'&&isRecruiter(req.user)?visibleState(compactCandidates(state,String(req.query.candidateIds||'').split(',').filter(Boolean)),req.user,userList,revision):visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
+app.get('/api/state',async(req,res)=>{const [{state,revision},userList]=await Promise.all([readState(pool),users(pool)]);res.json({user:req.user,data:req.query.compact==='1'&&isRecruiter(req.user)?visibleState(compactCandidates(state,String(req.query.candidateIds||'').split(',').filter(Boolean)),req.user,userList,revision):visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
 mountResumeLibrary(app,{pool});
 app.post('/api/candidates/save',hr,express.json({limit:'64kb'}),async(req,res)=>res.json(await saveCandidateChange(pool,req.user,req.body)));
@@ -80,23 +81,7 @@ app.post('/api/users',admin,express.json({limit:'8kb'}),async(req,res)=>{
  if(!/^[a-zA-Z0-9._-]{3,80}$/.test(username)||!['admin','HR','interviewer'].includes(role))return res.status(400).json({error:'账号须为 3 至 80 位字母、数字或 ._-，请选择角色'});
  const hash=await hashPassword(req.body.password);try{await pool.execute('INSERT INTO recruitment_users(id,username,name,role,password_hash) VALUES(?,?,?,?,?)',[randomUUID(),username,name,role,hash]);}catch(error){if(error.code==='ER_DUP_ENTRY')return res.status(409).json({error:'账号或姓名已存在，请使用唯一名称'});throw error;}res.json({ok:true});
 });
-app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>{
- const conn=await pool.getConnection();try{
-  await conn.beginTransaction();const {state:previous,revision}=await readState(conn,true);
-  if(req.body.revision!==revision){await conn.rollback();return res.status(409).json({error:'数据已被他人更新，请刷新页面后重试；本次修改尚未保存'});}
-  // Fetch both validation lists in one round trip on the transaction connection.
-  const [context]=await conn.query(`SELECT 'user' AS kind,id,username,name,role,frozen,NULL AS mime,NULL AS size FROM recruitment_users
-   UNION ALL SELECT 'file',id,NULL,name,NULL,NULL,mime,size FROM recruitment_files WHERE object_key LIKE 'resumes/%'`);
-  const userList=context.filter(row=>row.kind==='user').map(({id,username,name,role,frozen})=>({id,username,name,role,frozen}));
-  const files=context.filter(row=>row.kind==='file');
-  const actor=userList.find(u=>u.id===req.user.id);if(!actor||actor.frozen||!isRecruiter(actor))throw Object.assign(Error('账号权限已变化，请重新登录'),{status:403});
-  const state=validateHRState(previous,mergePartialCandidates(previous,req.body),userList.filter(u=>u.role==='interviewer').map(u=>u.name),files,actor.name,userList.filter(u=>u.role==='interviewer'&&!u.frozen).map(u=>u.name),actor);
-  await validateAvailabilityBookings(conn,previous,state,userList);
-  await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
-  for(const t of previous.templates.filter(t=>!state.templates.some(n=>n.id===t.id)))await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[actor.id,'删除流程模板：'+t.name,t.id]);
-  await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,'更新招聘数据','state']);await conn.commit();res.json(req.body.partialCandidates===true?visibleState(compactCandidates(state,Array.isArray(req.body.loadedCandidateIds)?req.body.loadedCandidateIds:[]),actor,userList,revision+1):visibleState(state,actor,userList,revision+1));
- }catch(error){await conn.rollback();throw error;}finally{conn.release();}
-});
+app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>res.json(await saveRecruitmentState(pool,req.user,req.body)));
 app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async(req,res)=>{
  const conn=await pool.getConnection();try{
   await conn.beginTransaction();const {state,revision}=await readState(conn,true);

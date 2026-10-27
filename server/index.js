@@ -1,3 +1,4 @@
+import {saveHRProgression} from './hr-progression.js';
 import {saveReviewTermination} from './review-termination.js';
 import {saveRoundReview} from './round-review.js';
 import {initializeFeishuBinding,mountFeishuBindingCallback,mountFeishuBinding} from './feishu-binding.js';
@@ -107,6 +108,7 @@ app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}
 });
 app.post('/api/applications/:appId/end-by-review',express.json({limit:'8kb'}),async(req,res)=>{res.json(await saveReviewTermination(pool,req.user,req.params.appId,req.body));});
+app.post('/api/applications/:appId/progression',hr,express.json({limit:'8kb'}),async(req,res)=>{res.json(await saveHRProgression(pool,req.user,req.params.appId,req.body));});
 app.patch('/api/applications/:appId/rounds/:roundId/review',express.json({limit:'8kb'}),async(req,res)=>{res.json(await saveRoundReview(pool,req.user,req.params.appId,req.params.roundId,req.body));});
 app.patch('/api/applications/:appId/rounds/:roundId/feedback',express.json({limit:'32kb'}),async(req,res)=>{
  res.json(await saveInterviewFeedback(pool,req.user,req.params.appId,req.params.roundId,req.body));

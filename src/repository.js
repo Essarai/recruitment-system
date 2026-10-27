@@ -74,3 +74,7 @@ export async function decideRoundReview(appId,roundId,decision,reason=''){
 export async function endReviewedApplication(appId,roundId,reason){
  const result=await request(`/applications/${encodeURIComponent(appId)}/end-by-review`,{method:'POST',body:JSON.stringify({revision:baseline.revision,roundId,reason})});baseline=structuredClone(result);return result;
 }
+
+export async function progressInterview(appId,body){
+ const result=await request(`/applications/${encodeURIComponent(appId)}/progression`,{method:'POST',body:JSON.stringify({...body,revision:baseline.revision})});baseline=structuredClone(result);return result;
+}

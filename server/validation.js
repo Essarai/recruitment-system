@@ -71,6 +71,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(result.interviewer&&!interviewers.includes(result.interviewer)&&oldRound?.interviewer!==result.interviewer)throw Error('面试官账号不存在');
    if(oldRound&&oldRound.name!==result.name)throw Error('不能改写已有轮次名称');
    if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.time||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
+   if(r.hrProgression!==undefined&&!equal(r.hrProgression,oldRound?.hrProgression))throw Error('不能伪造或改写 HR 推进决定');
+   if(oldRound?.hrProgression)result.hrProgression=structuredClone(oldRound.hrProgression);
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
    if(oldRound?.scheduleEvents)result.scheduleEvents=structuredClone(oldRound.scheduleEvents);
    const changed=!oldRound||scheduleKeys.some(k=>oldRound[k]!==result[k])||(oldRound.cancelled&&!result.cancelled);

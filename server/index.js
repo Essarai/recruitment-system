@@ -1,3 +1,4 @@
+import {saveCandidateChange} from './candidate-save.js';
 import {saveHRProgression} from './hr-progression.js';
 import {saveReviewTermination} from './review-termination.js';
 import {saveRoundReview} from './round-review.js';
@@ -66,6 +67,7 @@ app.get('/api/state/version',async(req,res)=>res.json({...await readVersion(pool
 app.get('/api/state',async(req,res)=>{const {state,revision}=await readState(pool),userList=await users(pool);res.json({user:req.user,data:req.query.compact==='1'&&isRecruiter(req.user)?visibleState(compactCandidates(state,String(req.query.candidateIds||'').split(',').filter(Boolean)),req.user,userList,revision):visibleState(state,req.user,userList,revision),directoryVersion:directoryVersion(userList)});});
 function admin(req,res,next){if(!canManageAccounts(req.user))return res.status(403).json({error:'仅管理员可以管理账号'});next();}
 mountResumeLibrary(app,{pool});
+app.post('/api/candidates/save',hr,express.json({limit:'64kb'}),async(req,res)=>res.json(await saveCandidateChange(pool,req.user,req.body)));
 mountFeishuRoutes(app,{pool,workerStatus:()=>feishuWorker.status()});
 mountWithdrawal(app,{pool});
 mountAvailability(app,{pool});

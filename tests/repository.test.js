@@ -75,3 +75,19 @@ test('按需读取完整档案，自动同步保留已加载 ID，过期详情�
  globalThis.fetch=async path=>{calls.push(path);if(path.startsWith('/api/candidates/'))return Response.json({revision,candidate:{id:'a',name:'候选人',notes:'完整备注',resumes:[]}});return Response.json({user:{id:'hr',role:'HR'},data:{partialCandidates:true,candidates:[summary],applications:[],revision:2}});};
  try{await load();const data=await loadCandidate('a');assert.equal(data.candidates[0].notes,'完整备注');assert.equal(data.candidates[0]._summary,undefined);await readUpdates({force:true});assert.equal(calls.at(-1),'/api/state?compact=1&candidateIds=a');revision=3;await assert.rejects(loadCandidate('a'),e=>e.status===409);}finally{globalThis.fetch=original;}
 });
+
+test('候选人导入独立保存，不发送旧全站数据；失败重试复用附件和候选人 ID',async()=>{
+ const original=globalThis.fetch,data={revision:1,candidates:[],applications:[{id:'a',status:'old'}],templates:[{id:'t'}]},file=new File(['%PDF-1.4'],'cv.pdf');let uploads=0,saves=0;
+ globalThis.fetch=async(path,options={})=>{
+  if(!options.method)return Response.json({user:{id:'hr',role:'HR'},data});
+  if(path.startsWith('/api/resumes?')){uploads++;return Response.json({id:'f',name:'cv.pdf',type:'application/pdf'});}
+  assert.equal(path,'/api/candidates/save');const body=JSON.parse(options.body);assert.equal(body.mode,'create');assert.equal(body.candidate.id,'new');assert.equal(body.revision,undefined);assert.equal(body.applications,undefined);assert.equal(body.templates,undefined);assert.equal(body.candidate.resumes[0].id,'f');saves++;
+  return saves===1?Response.json({error:'暂时不可用'},{status:503}):Response.json({...data,revision:99,candidates:[body.candidate],applications:[{id:'a',status:'server-latest'}]});
+ };
+ try{await load();const next={...data,candidates:[{id:'new',name:'候选人',resumes:[{file}]}]};await assert.rejects(save(next,()=>{},null,{id:'new',mode:'create'}),/暂时不可用/);const result=await save(next,()=>{},null,{id:'new',mode:'create'});assert.equal(uploads,1);assert.equal(saves,2);assert.equal(result.revision,99);assert.equal(result.applications[0].status,'server-latest');assert.equal(next.candidates[0].resumes[0].file,file);}finally{globalThis.fetch=original;}
+});
+test('候选人资料编辑携带原资料用于字段冲突检查，不重新上传已有附件',async()=>{
+ const original=globalThis.fetch,candidate={id:'c',company:'原公司',resumes:[{id:'f'}]},data={revision:1,candidates:[candidate],applications:[]};
+ globalThis.fetch=async(path,options={})=>{if(!options.method)return Response.json({user:{id:'hr',role:'HR'},data});assert.equal(path,'/api/candidates/save');const body=JSON.parse(options.body);assert.equal(body.mode,'profile');assert.equal(body.originalCandidate.company,'原公司');assert.equal(body.candidate.company,'新公司');assert.equal(body.candidate.resumes,undefined);return Response.json({...data,revision:10,candidates:[{...candidate,company:'新公司'}]});};
+ try{await load();const saved=await save({...data,candidates:[{...candidate,company:'新公司'}]},()=>{},null,{id:'c',mode:'profile'});assert.equal(saved.candidates[0].company,'新公司');}finally{globalThis.fetch=original;}
+});

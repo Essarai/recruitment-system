@@ -1,8 +1,10 @@
+import {profileFields} from './model.js';
 import {isRecruiter} from './permissions.js';
 let currentUser=null;
 let baseline=null;
 let currentDirectoryVersion=null;
 const transcriptUploads=new WeakMap();
+const resumeUploads=new WeakMap();
 export async function request(path,options={}){
  const response=await fetch('/api'+path,{credentials:'same-origin',...options,headers:{...(typeof options.body==='string'?{'Content-Type':'application/json'}:{}),...options.headers}});
  if(!response.ok){let result;try{result=await response.json();}catch{result={error:'服务暂时不可用，请稍后重试'};}const error=Error(result.error||'请求失败');error.status=response.status;throw error;}
@@ -16,9 +18,19 @@ export const login=(username,password)=>request('/login',{method:'POST',body:JSO
 export const logout=()=>request('/logout',{method:'POST'});
 export const createUser=user=>request('/users',{method:'POST',body:JSON.stringify(user)});
 export const changePassword=password=>request('/password',{method:'POST',body:JSON.stringify(password)});
-export async function save(next,onProgress=()=>{},feedbackTarget=null){
+export async function save(next,onProgress=()=>{},feedbackTarget=null,candidateTarget=null){
  let result;
- if(isRecruiter(currentUser)){
+ if(candidateTarget&&isRecruiter(currentUser)){
+  const candidate=next.candidates.find(c=>c.id===candidateTarget.id),originalCandidate=baseline.candidates.find(c=>c.id===candidateTarget.id);if(!candidate)throw Error('候选人不存在，请重新打开档案');
+  const body={mode:candidateTarget.mode,candidate:{...candidate},...(candidateTarget.mode==='profile'?{originalCandidate:originalCandidate&&!originalCandidate._summary?Object.fromEntries(['id','name','phone','email',...profileFields.map(([key])=>key),'notes'].map(key=>[key,originalCandidate[key]??''])):null}:{}),loadedCandidateIds:next.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-19)};
+  if(candidateTarget.mode!=='profile'){
+   const pending=candidate.resumes?.filter(r=>r.file instanceof File)||[];if(pending.length!==1)throw Error('请选择一份简历文件');
+   const file=pending[0].file;onProgress('正在上传简历…');
+   if(!resumeUploads.has(file))resumeUploads.set(file,request('/resumes?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file}).catch(e=>{resumeUploads.delete(file);throw e;}));
+   body.candidate.resumes=[await resumeUploads.get(file)];
+  }else delete body.candidate.resumes;
+  onProgress('正在保存候选人档案…');result=await request('/candidates/save',{method:'POST',body:JSON.stringify(body)});
+ }else if(isRecruiter(currentUser)){
   const payload={...next,...(next.partialCandidates?{loadedCandidateIds:next.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-20)}:{}),candidates:next.candidates.map(c=>({...c,...(c.resumes?{resumes:c.resumes.map(r=>({...r}))}:{})})),applications:next.applications.map(app=>({...app}))};
   for(const candidate of payload.candidates)for(let i=0;i<(candidate.resumes||[]).length;i++){const version=candidate.resumes[i];if(version.file instanceof File){onProgress('正在上传简历…');candidate.resumes[i]=await request('/resumes?name='+encodeURIComponent(version.file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:version.file});}}
   for(const app of payload.applications){if(app.resume?.file instanceof File){const file=app.resume.file;onProgress('正在上传简历…');app.resume=await request('/resumes?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});}}

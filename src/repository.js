@@ -88,6 +88,9 @@ export async function withdrawApplication(id){
 export async function decideRoundReview(appId,roundId,decision,reason=''){
  const result=await request(`/applications/${encodeURIComponent(appId)}/rounds/${encodeURIComponent(roundId)}/review`,{method:'PATCH',body:JSON.stringify({revision:baseline.revision,decision,reason})});baseline=structuredClone(result);return result;
 }
+export async function supplementResumeReview(appId,roundId,response,interviewer){
+ const result=await request(`/applications/${encodeURIComponent(appId)}/review-supplement`,{method:'POST',body:JSON.stringify({revision:baseline.revision,roundId,response,interviewer,candidateIds:baseline.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-19)})});baseline=structuredClone(result);return result;
+}
 
 export async function endReviewedApplication(appId,roundId,reason){
  const result=await request(`/applications/${encodeURIComponent(appId)}/end-by-review`,{method:'POST',body:JSON.stringify({revision:baseline.revision,roundId,reason})});baseline=structuredClone(result);return result;

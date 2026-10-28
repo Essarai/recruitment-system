@@ -26,10 +26,10 @@ test('仅被指定的面试官可以审核；通过后 HR 可安排且不自动�
  const s=make();activate(s);const a=s.applications[0],r=a.rounds[1],schedule={interviewer:'二面官',time:'2026-10-30T14:00',mode:'线上',location:'https://example.com'};
  assert.throws(()=>validateSchedule(a,r,schedule),/本轮简历审核/);for(const u of [people[0],people[1],people[3]])assert.throws(()=>decideRoundReview(a,r,u,'accepted'),/待审核/);
  decideRoundReview(a,r,people[2],'accepted');assert.equal(a.status,'进行中');assert.equal(r.time,'');assert.doesNotThrow(()=>validateSchedule(a,r,schedule));assert.throws(()=>validateSchedule(a,r,{...schedule,interviewer:'三面官'}),/更换/);assert.throws(()=>decideRoundReview(a,r,people[2],'accepted'),/待审核/);
- const view=visibleState(s,people[2],people,2);assert.equal(view.candidates[0].notes,undefined);assert.equal(interviewGroups(view,'二面官')[0].waiting,1);
+ const view=visibleState(s,people[2],people,2);assert.equal(view.candidates[0].notes,s.candidates[0].notes);assert.equal(interviewGroups(view,'二面官')[0].waiting,1);
 });
 test('审核不通过必须有原因，终止应聘并取消未来轮次，保留已提交面评',()=>{
- const s=make();activate(s);const a=s.applications[0];assert.throws(()=>decideRoundReview(a,a.rounds[1],people[2],'declined',''),/原因/);decideRoundReview(a,a.rounds[1],people[2],'declined','岗位经历不匹配');assert.equal(a.status,'未录用');assert.match(a.reason,/复试简历审核不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(a.rounds[0].feedback.status,'submitted');assert.equal(canAccessResume(a,people[2]),false);assert.match(a.history[0].action,/不通过/);
+ const s=make();activate(s);const a=s.applications[0];assert.throws(()=>decideRoundReview(a,a.rounds[1],people[2],'declined',''),/原因/);decideRoundReview(a,a.rounds[1],people[2],'declined','岗位经历不匹配');assert.equal(a.status,'未录用');assert.match(a.reason,/复试简历审核不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(a.rounds[0].feedback.status,'submitted');assert.equal(canAccessResume(a,people[2]),true);assert.match(a.history[0].action,/不通过/);
 });
 test('HR 无法伪造审核通过，更换确认人重置审核，已有排期不能借此改人',()=>{
  const s=make();activate(s);const names=people.filter(u=>u.role==='interviewer').map(u=>u.name);const validate=(before,next)=>validateHRState(before,next,names,[file],'推荐 HR',names,people[0]);

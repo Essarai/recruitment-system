@@ -11,7 +11,7 @@ export function MobileApplications({rows,data,now,select,date}){
 }
 function MobileApplication({app,candidate:c,users,now,select,date,initialExpanded}){
  const stage=applicationStage(app,now),steps=applicationProgress(app),wait=applicationWait(app,now),next=nextInterview(app);
- const status=stage.round&&!stage.awaitingHR?stage.name+' · '+(stage.round.review?.status==='pending'?'待审核简历':stage.detail.split(' · ').slice(1).join(' · ')):stage.name;
+ const status=stage.round&&stage.round.review?.status!=='needs_info'&&!stage.awaitingHR?stage.name+' · '+(stage.round.review?.status==='pending'?'待审核简历':stage.detail.split(' · ').slice(1).join(' · ')):stage.name;
  return <article className="mobile-application" aria-label={c.name+'的应聘'}>
   <div className="mobile-record-heading"><button className="name-link" onClick={()=>select(app.id)}>{c.name}</button><button className="text-button" onClick={()=>select(app.id)}>查看详情<img src={chevronIcon} alt=""/></button></div>
   <div className="mobile-record-secondary"><p className="mobile-record-profile">{[app.job,c.age?c.age+'岁':'',educationOptions.includes(c.education)?c.education:''].filter(Boolean).join(' · ')}</p>{next&&<p className="mobile-record-appointment">{date(next.time)}</p>}</div>

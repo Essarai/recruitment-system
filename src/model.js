@@ -1,4 +1,5 @@
 import {pendingHRDecision,reviewSourceValid} from './round-review.js';
+import {resumeReviewDecision} from './resume-review.js';
 export const highestEducationOptions=['博士','硕士','本科','大专'];
 export const educationOptions=['双九硕','单九硕','双二硕','单二硕','双非硕','九本','211本','普本','大专'];
 export function validateContacts(value){
@@ -76,12 +77,13 @@ export function endApplication(app,status,reason){
 export function applicationStage(app,now=Date.now()){
  if(!app)return {name:'未创建应聘',detail:'可创建新的应聘记录',tone:'neutral'};
  if(app.status!=='进行中')return {name:applicationStatus(app),detail:app.reason||'应聘已结束',tone:app.withdrawnAt?'neutral':app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
- if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='accepted'?'简历确认已通过，可安排面试':s?.status==='pending'?`${s.interviewer} · 等待确认`:s?.status==='declined'?s.reason:'先指定简历确认人'};}
+ if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='needs_info'?'需 HR 补充':s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='needs_info'?s.reason:s?.status==='accepted'?'简历确认已通过，可安排面试':s?.status==='pending'?`${s.interviewer} · 等待确认`:s?.status==='declined'?s.reason:'先指定简历确认人'};}
  const decision=pendingHRDecision(app);
  if(decision)return {name:`${decision.source.name} · ${decision.source.feedback.conclusion==='待定'?'结论待定':'建议加面'}`,detail:'本轮面评已提交，等待发起 HR 决定后续安排',tone:'pending',round:decision.source,awaitingHR:true};
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
  const round=app.rounds[index];
+ if(round.review?.status==='needs_info')return {name:`${round.name} · 需 HR 补充`,detail:round.review.reason,tone:'pending',round};
  const status=round.review?.status==='pending'?`等待 ${round.review.interviewer||'HR 指定面试官'} 审核简历`:round.cancelled?'待重新安排':!round.time?'待安排':round.feedback.status==='returned'?'待提交':new Date(round.time).getTime()<=now?'待提交面评':'待面试';
  return {tone:roundTone(round,now),name:round.name,detail:`第 ${index+1} / ${app.rounds.length} 轮 · ${status}`,round};
 }
@@ -101,9 +103,7 @@ export function validateResumeConfirmation(app){
 }
 export function reviewResume(app,person,decision,reason=''){
  if(app.status!=='进行中'||app.screening?.status!=='pending'||app.screening.interviewer!==person)throw Error('该简历不在你的待确认列表中，请刷新后重试');
- if(!['accepted','declined'].includes(decision))throw Error('请选择确认通过或不通过');
- if(typeof reason!=='string'||reason.length>2000||(decision==='declined'&&!reason.trim()))throw Error('不通过时请填写原因（不超过 2000 字）');
- return {...app.screening,status:decision,reason:decision==='declined'?reason.trim():'',reviewedAt:new Date().toISOString(),reviewedBy:person};
+ return resumeReviewDecision(app.screening,person,decision,reason);
 }
 
 export function mergeResumeFields(current,parsed,edited=new Set(),previous={}){

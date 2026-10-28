@@ -20,5 +20,5 @@ export function applicationCreatorName(app,users=[]){
 }
 
 export function canWithdrawApplication(user,app){
- return canManageApplication(user,app)&&app?.status==='进行中'&&!app.withdrawnAt&&!['accepted','declined'].includes(app.screening?.status)&&!app.screening?.reviewedAt&&!app.rounds.some(r=>r.feedback?.status&&r.feedback.status!=='none'||r.feedback?.author||r.feedback?.submittedAt||r.feedbackVersions?.length);
+ return canManageApplication(user,app)&&app?.status==='进行中'&&!app.withdrawnAt&&!['accepted','declined','needs_info'].includes(app.screening?.status)&&!app.screening?.reviewedAt&&!app.screening?.supplements?.length&&!app.rounds.some(r=>r.review?.supplements?.length||r.feedback?.status&&r.feedback.status!=='none'||r.feedback?.author||r.feedback?.submittedAt||r.feedbackVersions?.length);
 }

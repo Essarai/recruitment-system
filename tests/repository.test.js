@@ -92,3 +92,8 @@ test('候选人资料编辑携带原资料用于字段冲突检查，不重新�
  globalThis.fetch=async(path,options={})=>{if(!options.method)return Response.json({user:{id:'hr',role:'HR'},data});assert.equal(path,'/api/candidates/save');const body=JSON.parse(options.body);assert.equal(body.mode,'profile');assert.equal(body.originalCandidate.company,'原公司');assert.equal(body.candidate.company,'新公司');assert.equal(body.candidate.resumes,undefined);return Response.json({...data,revision:10,candidates:[{...candidate,company:'新公司'}]});};
  try{await load();const saved=await save({...data,candidates:[{...candidate,company:'新公司'}]},()=>{},null,{id:'c',mode:'profile'});assert.equal(saved.candidates[0].company,'新公司');}finally{globalThis.fetch=original;}
 });
+test('HR 补充独立提交当前轮次和说明，携带已加载档案 ID，成功后更新基线',async()=>{
+ const {supplementResumeReview,readUpdates}=await import('../src/repository.js'),original=globalThis.fetch,data={revision:7,partialCandidates:true,candidates:[{id:'full',notes:'完整记录'},{id:'summary',_summary:true}],applications:[]};let sent;
+ globalThis.fetch=async(path,options={})=>{if(options.method==='POST'){assert.equal(path,'/api/applications/app/review-supplement');sent=JSON.parse(options.body);return Response.json({...data,revision:8});}if(path==='/api/state/version')return Response.json({revision:8,directoryVersion:'qa',userId:'hr'});return Response.json({user:{id:'hr',role:'HR'},data,directoryVersion:'qa'});};
+ try{await load();await supplementResumeReview('app','round','已核实补充信息','面试官');assert.deepEqual(sent,{revision:7,roundId:'round',response:'已核实补充信息',interviewer:'面试官',candidateIds:['full']});assert.equal(await readUpdates(),null);}finally{globalThis.fetch=original;}
+});

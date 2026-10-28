@@ -1,5 +1,6 @@
 import {saveCandidateChange} from './candidate-save.js';
 import {saveRecruitmentState} from './state-changes.js';
+import {saveReviewSupplement} from './review-supplement.js';
 import {saveHRProgression} from './hr-progression.js';
 import {saveReviewTermination} from './review-termination.js';
 import {saveRoundReview} from './round-review.js';
@@ -82,18 +83,20 @@ app.post('/api/users',admin,express.json({limit:'8kb'}),async(req,res)=>{
  const hash=await hashPassword(req.body.password);try{await pool.execute('INSERT INTO recruitment_users(id,username,name,role,password_hash) VALUES(?,?,?,?,?)',[randomUUID(),username,name,role,hash]);}catch(error){if(error.code==='ER_DUP_ENTRY')return res.status(409).json({error:'账号或姓名已存在，请使用唯一名称'});throw error;}res.json({ok:true});
 });
 app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>res.json(await saveRecruitmentState(pool,req.user,req.body)));
+app.post('/api/applications/:appId/review-supplement',hr,express.json({limit:'16kb'}),async(req,res)=>res.json(await saveReviewSupplement(pool,req.user,req.params.appId,req.body)));
 app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async(req,res)=>{
  const conn=await pool.getConnection();try{
   await conn.beginTransaction();const {state,revision}=await readState(conn,true);
   if(req.body.revision!==revision){await conn.rollback();return res.status(409).json({error:'数据已更新，请刷新后重新确认'});}
   const app=state.applications.find(a=>a.id===req.params.appId);
-  if(!app||req.user.role!=='interviewer'||app.screening?.interviewer!==req.user.name){await conn.rollback();return res.status(403).json({error:'无权确认此简历'});}
-  app.screening=decideScreening(app,req.user,req.body.decision,req.body.reason||'');
-  terminateFailedApplication(app,req.user.name);
-  app.history.unshift({at:new Date().toISOString(),actor:req.user.name,action:app.screening.status==='accepted'?'简历确认通过':`简历筛选不通过：${app.screening.reason}`});
+  const people=await users(conn),actor=people.find(p=>p.id===req.user.id);
+  if(!app||!actor||actor.frozen||actor.role!=='interviewer'||app.screening?.interviewer!==actor.name){await conn.rollback();return res.status(403).json({error:'无权确认此简历'});}
+  app.screening=decideScreening(app,actor,req.body.decision,req.body.reason||'');
+  terminateFailedApplication(app,actor.name);
+  app.history.unshift({at:new Date().toISOString(),actor:actor.name,action:app.screening.status==='needs_info'?`简历确认需 HR 补充：${app.screening.reason}`:app.screening.status==='accepted'?'简历确认通过':`简历筛选不通过：${app.screening.reason}`});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[req.user.id,'确认推荐简历',app.id]);await conn.commit();
-  res.json(visibleState(state,req.user,await users(pool),revision+1));
+  res.json(visibleState(state,actor,people,revision+1));
  }catch(error){await conn.rollback();throw error;}finally{conn.release();}
 });
 app.post('/api/applications/:appId/end-by-review',express.json({limit:'8kb'}),async(req,res)=>{res.json(await saveReviewTermination(pool,req.user,req.params.appId,req.body));});

@@ -20,7 +20,8 @@ export function activateRoundReviews(app,sentBy='',now=new Date().toISOString())
   if(previous.feedback.status!=='submitted'||(previous.feedback.conclusion!=='建议通过'&&!progressionValid(previous,next))||next.time||next.cancelled||next.feedback.status!=='none')continue;
   const progressionId=previous.feedback.conclusion==='建议通过'?undefined:previous.hrProgression.id;
   if(next.review?.sourceRoundId===previous.id&&next.review.sourceSubmittedAt===(previous.feedback.submittedAt||'')&&next.review.sourceProgressionId===progressionId)continue;
-  next.review={status:'pending',interviewer:next.interviewer||'',sentBy,sentAt:now,sourceRoundId:previous.id,sourceSubmittedAt:previous.feedback.submittedAt||'',...(progressionId?{sourceProgressionId:progressionId}:{}),reason:''};changed=true;
+  const supplements=next.review?.supplements?.map(item=>item.response||item.supersededAt?item:{...item,supersededAt:now});
+  next.review={status:'pending',interviewer:next.interviewer||'',sentBy,sentAt:now,sourceRoundId:previous.id,sourceSubmittedAt:previous.feedback.submittedAt||'',...(progressionId?{sourceProgressionId:progressionId}:{}),...(supplements?.length?{supplements}:{}),reason:''};changed=true;
  }
  return changed;
 }
@@ -28,4 +29,5 @@ export function reviewSourceValid(app,round){
  const previous=app.rounds[app.rounds.findIndex(r=>r.id===round.id)-1];
  return !!previous&&previous.id===round.review?.sourceRoundId&&previous.feedback.status==='submitted'&&(previous.feedback.submittedAt||'')===round.review.sourceSubmittedAt&&(previous.feedback.conclusion==='建议通过'?!round.review.sourceProgressionId:progressionValid(previous,round)&&round.review.sourceProgressionId===previous.hrProgression.id);
 }
-export function canReviewRound(app,round,person){return app.status==='进行中'&&!app.withdrawnAt&&!round.cancelled&&round.review?.interviewer===person&&['pending','accepted'].includes(round.review.status)&&reviewSourceValid(app,round);}
+export function canReviewRound(app,round,person){return app.status==='进行中'&&!app.withdrawnAt&&!round.cancelled&&round.review?.interviewer===person&&['pending','accepted','needs_info'].includes(round.review.status)&&reviewSourceValid(app,round);}
+export function canReadRoundReview(app,round,person){return !app.withdrawnAt&&round.interviewer===person&&round.review?.interviewer===person&&(canReviewRound(app,round,person)||reviewSourceValid(app,round)&&['accepted','declined','needs_info'].includes(round.review.status));}

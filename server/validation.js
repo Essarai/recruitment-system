@@ -77,7 +77,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(!['线上','线下'].includes(result.mode))throw Error('请选择面试方式');
    if(result.interviewer&&!interviewers.includes(result.interviewer)&&oldRound?.interviewer!==result.interviewer)throw Error('面试官账号不存在');
    if(oldRound&&oldRound.name!==result.name)throw Error('不能改写已有轮次名称');
-   if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.time||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
+   if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.review.status==='needs_info')throw Error('请先补充说明并重新送审，不能绕过待补充要求');if(oldRound.time||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
    if(r.hrProgression!==undefined&&!equal(r.hrProgression,oldRound?.hrProgression))throw Error('不能伪造或改写 HR 推进决定');
    if(oldRound?.hrProgression)result.hrProgression=structuredClone(oldRound.hrProgression);
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;

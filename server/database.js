@@ -1,8 +1,10 @@
 import {reviewTerminationTargets} from '../src/review-termination.js';
-import {activateRoundReviews,canReviewRound} from '../src/round-review.js';
+import {activateRoundReviews} from '../src/round-review.js';
 import {isRecruiter,canManageAccounts,applicationCreatorName} from '../src/permissions.js';
 import {terminateFailedApplication} from '../src/model.js';
 import {canReviewResume} from './screening.js';
+import {canReadInitialReview} from '../src/resume-review.js';
+import {canReadRoundReview} from '../src/round-review.js';
 import {randomUUID} from 'node:crypto';
 import {hashPassword} from './auth.js';
 export const emptyState=()=>({candidates:[],applications:[],templates:[]});
@@ -34,8 +36,11 @@ export async function readState(db,lock=false){const [[row]]=await db.query('SEL
 export async function users(db){const [rows]=await db.query('SELECT id,username,name,role,frozen FROM recruitment_users ORDER BY created_at,id');return rows;}
 export function visibleState(state,user,userList,revision,{screeningNotes=true}={}){
  if(isRecruiter(user))return {...structuredClone(state),applications:state.applications.map(a=>({...structuredClone(a),rounds:a.rounds.map(r=>({...structuredClone(r),feedback:['none','draft','returned'].includes(r.feedback.status)?{status:r.feedback.status,returnReason:r.feedback.returnReason||''}:r.feedback}))})),users:canManageAccounts(user)?userList:userList.filter(u=>u.role==='interviewer').map(({id,name,role,frozen})=>({id,name,role,frozen})),revision};
- const applications=state.applications.filter(a=>canReviewResume(a,user)||a.rounds.some(r=>r.time&&r.interviewer===user.name||screeningNotes&&canReviewRound(a,r,user.name))).map(a=>({...a,...(screeningNotes?{recommendedBy:a.screening?.sentBy||applicationCreatorName(a,userList),reviewTerminationTargets:reviewTerminationTargets(a,user)}:{}),screening:canReviewResume(a,user)?{...a.screening,interviewsScheduled:a.rounds.some(r=>r.time&&!r.cancelled),firstInterviewScheduled:!!(a.rounds[0]?.time&&!a.rounds[0]?.cancelled),scheduledRoundName:a.rounds.find(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted')?.name||''}:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>r.time&&r.interviewer===user.name||screeningNotes&&canReviewRound(a,r,user.name)).map(r=>{const {feedbackVersions,scheduleEvents,hrProgression,...own}=r;return own;})}));
+ const initialVisible=a=>canReviewResume(a,user)||screeningNotes&&user.role==='interviewer'&&canReadInitialReview(a,user.name);
+ const roundVisible=(a,r)=>r.time&&r.interviewer===user.name||screeningNotes&&user.role==='interviewer'&&canReadRoundReview(a,r,user.name);
+ const reviewView=review=>{if(!review)return review;const {supplements,...safe}=review;return {...safe,...(screeningNotes&&supplements?{supplements:supplements.filter(item=>item.requestedBy===user.name||item.assignedTo===user.name)}:{})};};
+ const applications=state.applications.filter(a=>initialVisible(a)||a.rounds.some(r=>roundVisible(a,r))).map(a=>({...a,...(screeningNotes?{recommendedBy:a.screening?.sentBy||applicationCreatorName(a,userList),reviewTerminationTargets:reviewTerminationTargets(a,user)}:{}),screening:initialVisible(a)?{...reviewView(a.screening),interviewsScheduled:a.rounds.some(r=>r.time&&!r.cancelled),firstInterviewScheduled:!!(a.rounds[0]?.time&&!a.rounds[0]?.cancelled),scheduledRoundName:a.rounds.find(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted')?.name||''}:undefined,reason:'',history:[],rounds:a.rounds.filter(r=>roundVisible(a,r)).map(r=>{const {feedbackVersions,scheduleEvents,hrProgression,review,...own}=r;return {...own,...(review?{review:reviewView(review)}:{})};})}));
  const ids=new Set(applications.map(a=>a.candidateId));
- const reviewIds=new Set(screeningNotes?state.applications.filter(a=>(canReviewResume(a,user)&&a.screening.status==='pending'||a.rounds.some(r=>r.review?.status==='pending'&&canReviewRound(a,r,user.name)))).map(a=>a.candidateId):[]);
- return {candidates:state.candidates.filter(c=>ids.has(c.id)).map(c=>{const {notes,resumes,createdBy,createdAt,...safe}=c;return {...safe,...(reviewIds.has(c.id)?{notes}:{} )};}),applications,templates:[],users:[user],revision};
+ const noteIds=new Set(applications.filter(a=>!a.withdrawnAt).map(a=>a.candidateId));
+ return {candidates:state.candidates.filter(c=>ids.has(c.id)).map(c=>{const {notes,resumes,createdBy,createdAt,...safe}=c;return {...safe,...(screeningNotes&&noteIds.has(c.id)?{notes}:{})};}),applications,templates:[],users:[user],revision};
 }

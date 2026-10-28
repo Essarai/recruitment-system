@@ -9,7 +9,7 @@ test('密码哈希带随机盐且拒绝错误和短密码',async()=>{const p='A-
 test('上传拒绝伪装扩展名、路径、空文件，识别 PDF',()=>{assert.equal(validateResume('cv.pdf',Buffer.from('%PDF-1.4')).type,'application/pdf');for(const [name,file] of [['cv.pdf',Buffer.from('fake')],['../cv.pdf',Buffer.from('%PDF')],['cv.docx',Buffer.alloc(0)]])assert.throws(()=>validateResume(name,file));});
 const file={id:'file1',name:'cv.pdf',mime:'application/pdf',size:100};
 function state(){return {candidates:[{id:'candidate1',name:'测试',phone:'123',email:'',notes:'HR 私密备注'}],templates:[],applications:[{id:'app1',candidateId:'candidate1',job:'测试岗位',status:'进行中',reason:'',resume:{id:file.id,name:file.name,type:file.mime,size:file.size},history:[],rounds:[{...round('初试'),id:'round1',interviewer:'面试官甲',time:'2026-10-20T10:00',location:'https://example.com/meeting',feedback:{status:'draft',summary:'草稿内容',conclusion:''}},{...round('复试'),id:'round2',interviewer:'面试官乙',time:'2026-10-21T10:00',feedback:{status:'submitted',summary:'其他面试官评价'}}]}]};}
-test('面试官只能收到本人面试及本人面评，HR 不读取草稿正文',()=>{const s=state();const view=visibleState(s,{name:'面试官甲',role:'interviewer'},[],1);assert.equal(view.applications[0].rounds.length,1);assert.equal(view.applications[0].rounds[0].feedback.summary,'草稿内容');assert.equal(view.candidates[0].notes,undefined);assert.equal(visibleState(s,{name:'无人',role:'interviewer'},[],1).candidates.length,0);assert.equal(visibleState(s,{role:'HR'},[],1).applications[0].rounds[0].feedback.summary,undefined);});
+test('面试官只能收到本人面试及本人面评，HR 不读取草稿正文',()=>{const s=state();const view=visibleState(s,{name:'面试官甲',role:'interviewer'},[],1);assert.equal(view.applications[0].rounds.length,1);assert.equal(view.applications[0].rounds[0].feedback.summary,'草稿内容');assert.equal(view.candidates[0].notes,s.candidates[0].notes);assert.equal(visibleState(s,{name:'无人',role:'interviewer'},[],1).candidates.length,0);assert.equal(visibleState(s,{role:'HR'},[],1).applications[0].rounds[0].feedback.summary,undefined);});
 test('HR 保存不清除隐藏草稿，禁止代录、清除原记录及结束后新增安排',()=>{const s=state(),view=visibleState(s,{role:'HR'},[],1),names=['面试官甲','面试官乙'];const saved=validateHRState(s,view,names,[file],'HR');assert.equal(saved.applications[0].rounds[0].feedback.summary,'草稿内容');const removed=structuredClone(view);removed.applications=[];assert.throws(()=>validateHRState(s,removed,names,[file],'HR'));const forged=structuredClone(view);forged.applications[0].rounds[0].feedback={status:'submitted',summary:'HR 代录'};assert.throws(()=>validateHRState(s,forged,names,[file],'HR'));});
 test('初始数据库业务数据为空，未安排默认面试官不产生可见面试',()=>{assert.deepEqual(emptyState(),{candidates:[],applications:[],templates:[]});const s=state();s.applications[0].rounds[0].time='';assert.equal(visibleState(s,{name:'面试官甲',role:'interviewer'},[],0).applications.length,0);});
 
@@ -38,14 +38,14 @@ test('独立简历确认后首轮可安排不同面试官，后续须逐轮审�
  assert.throws(()=>validateHRState(saved,before,names,[file],'HR'),/简历确认/);
  const premature=structuredClone(saved);Object.assign(premature.applications[0].rounds[1],{interviewer:'乙',time:'2026-10-21T10:00',location:'https://example.com'});assert.throws(()=>validateHRState(saved,premature,names,[file],'HR'),/简历确认/);
  const forged=structuredClone(saved);forged.applications[0].screening.status='accepted';assert.throws(()=>validateHRState(saved,forged,names,[file],'HR'),/不能代为接受/);
- const declined=decideScreening(app,first,'declined','需补充经历');assert.equal(declined.reason,'需补充经历');assert.equal(canAccessResume({...app,screening:declined},first),false);assert.equal(app.status,'进行中');
+ const declined=decideScreening(app,first,'declined','需补充经历');assert.equal(declined.reason,'需补充经历');assert.equal(canAccessResume({...app,screening:declined},first),true);assert.equal(app.status,'进行中');
  app.screening=decideScreening(app,first,'accepted');assert.throws(()=>decideScreening(app,first,'accepted'));
  const schedule=structuredClone(saved);Object.assign(schedule.applications[0].rounds[0],{interviewer:'甲',time:'2026-10-20T10:00',location:'https://example.com'});
  const blocked=structuredClone(schedule);Object.assign(blocked.applications[0].rounds[1],{interviewer:'乙',time:'2026-10-21T10:00',location:'https://example.com'});assert.throws(()=>validateHRState(saved,blocked,names,[file],'HR'),/本轮简历审核/);
  const arranged=validateHRState(saved,schedule,names,[file],'HR');assert.equal(arranged.applications[0].rounds[0].interviewer,'甲');
  const wrong=structuredClone(schedule);wrong.applications[0].rounds[0].interviewer='乙';assert.equal(validateHRState(saved,wrong,names,[file],'HR').applications[0].rounds[0].interviewer,'乙');
  const resend=structuredClone(saved);resend.applications[0].screening={status:'pending',interviewer:'乙'};const resent=validateHRState(saved,resend,names,[file],'HR');assert.equal(canAccessResume(resent.applications[0],first),false);assert.equal(canAccessResume(resent.applications[0],other),true);
- const ended={...app,status:'候选人退出'};assert.throws(()=>decideScreening(ended,first,'accepted'));assert.equal(canAccessResume(ended,first),false);
+ const ended={...app,status:'候选人退出'};assert.throws(()=>decideScreening(ended,first,'accepted'));assert.equal(canAccessResume(ended,first),true);
 });
 
 test('终止的原应聘不能重新推送/排期；重新捞起创建新 ID 并保留历史',async()=>{
@@ -137,15 +137,16 @@ test('应聘按原始创建时间倒序，修改时间不影响，缺失时间�
  const duplicate={id:'dup',history:[{action:'创建应聘',at:'2026-10-23T00:00:00Z'},{action:'创建应聘',at:'2026-09-01T00:00:00Z'}]};assert.deepEqual(newestApplications([duplicate,old]).map(a=>a.id),['old','dup']);
 });
 
-test('only current pending resume reviewer sees HR communication notes in browser; MCP and other interviewers remain isolated',async()=>{
+test('参与本次应聘的面试官持续读取 HR 沟通记录；无关用户和 MCP 保持隔离',async()=>{
  const {myInterviews}=await import('../server/mcp.js');
  const s=state(),reviewer={id:'reviewer',role:'interviewer',name:'面试官甲'};
  s.applications[0].screening={status:'pending',interviewer:reviewer.name};
  assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,s.candidates[0].notes);
- assert.equal(visibleState(s,{name:'面试官乙',role:'interviewer'},[],1).candidates[0].notes,undefined);
+ assert.equal(visibleState(s,{name:'面试官乙',role:'interviewer'},[],1).candidates[0].notes,s.candidates[0].notes);
+ assert.equal(visibleState(s,{name:'无关用户',role:'interviewer'},[],1).candidates.length,0);
  assert.equal(myInterviews(s,reviewer).candidates[0].notes,undefined);
- for(const status of ['accepted','declined','skipped']){s.applications[0].screening.status=status;assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,undefined);}
- s.applications[0].screening.status='pending';s.applications[0].status='未录用';assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,undefined);
+ for(const status of ['accepted','declined','skipped']){s.applications[0].screening.status=status;assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,s.candidates[0].notes);}
+ s.applications[0].screening.status='pending';s.applications[0].status='未录用';assert.equal(visibleState(s,reviewer,[],1).candidates[0].notes,s.candidates[0].notes);
 });
 
 test('HR 可删除未安排轮次，保留历史、顺序及至少一轮的限制',()=>{

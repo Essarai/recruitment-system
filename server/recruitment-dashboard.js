@@ -16,6 +16,7 @@ const phases={review:{name:'待确认简历',party:'面试官'},schedule:{name:'
 function currentPhase(app,created,now){
  if(app.status!=='进行中')return null;
  const screening=app.screening;
+ if(screening?.status==='needs_info')return {key:'decision',round:'简历确认 · 需 HR 补充',since:screening.reviewedAt,clock:'距提出补充要求'};
  if(screening?.status==='pending')return {key:'review',round:'简历确认',since:screening.sentAt,clock:'距推送简历'};
  if(screening&&screening.status!=='skipped'&&screening.status!=='accepted')return {key:'schedule',round:'待指定简历确认人',since:created,clock:'距创建应聘'};
  const pending=pendingHRDecision(app);
@@ -23,6 +24,7 @@ function currentPhase(app,created,now){
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0){const times=app.rounds.map(r=>recruitmentTime(r.feedback.submittedAt)).filter(v=>v!==null);return {key:'decision',round:'所有轮次面评已交',since:times.length?Math.max(...times):null,clock:'距最后面评提交'};}
  const round=app.rounds[index],time=recruitmentTime(round.time);
+ if(!round.time&&round.review?.status==='needs_info'&&reviewSourceValid(app,round))return {key:'decision',round:round.name+' · 需 HR 补充',since:round.review.reviewedAt,clock:'距提出补充要求'};
  if(!round.time&&round.review?.status==='pending'&&reviewSourceValid(app,round))return {key:round.review.interviewer?'review':'schedule',round:round.name+(round.review.interviewer?'简历审核':'待指定审核面试官'),since:round.review.sentAt,clock:'距发起本轮审核'};
  if(round.cancelled||time===null){const cancellation=[...(round.scheduleEvents||[])].reverse().find(e=>e.type==='cancelled');return {key:'schedule',round:round.name,since:cancellation?.at||(index?app.rounds[index-1].feedback.submittedAt:screening?.reviewedAt||created),clock:'距进入待安排'};}
  if(['draft','returned'].includes(round.feedback.status)||time<=now)return {key:'feedback',round:round.name,since:time,scheduledTime:round.time,clock:'距计划面试时间'};

@@ -1,4 +1,24 @@
 import {canReadInitialReview} from './resume-review.js';
+import {applicationStatus} from './model.js';
+export const interviewProgressFilters=[['review','简历待确认'],['needs_info','待 HR 补充'],['schedule','待 HR 排期'],['interview','待面试'],['feedback','待提交面评'],['submitted','面评已提交']];
+export function filterInterviewGroups(groups,{progress='',job='',round='',result=''}={},now=Date.now()){
+ return groups.filter(group=>group.applications.some(item=>{
+  const {app}=item;if(job&&app.job!==job||result&&applicationStatus(app)!==result)return false;
+  const screening=item.screening&&(!round||round==='screening'),rounds=round==='screening'?[]:item.rounds.filter(r=>!round||'round:'+r.name===round);
+  if(round&&!screening&&!rounds.length)return false;
+  const active=app.status==='进行中'&&!app.withdrawnAt;
+  switch(progress){
+   case '':return true;
+   case 'review':return active&&(screening&&app.screening.status==='pending'||rounds.some(r=>!r.cancelled&&r.review?.status==='pending'));
+   case 'needs_info':return active&&(screening&&app.screening.status==='needs_info'||rounds.some(r=>!r.cancelled&&r.review?.status==='needs_info'));
+   case 'schedule':return active&&(screening&&app.screening.status==='accepted'&&!app.screening.interviewsScheduled&&!item.rounds.some(r=>r.time)||rounds.some(r=>!r.cancelled&&!r.time&&r.review?.status==='accepted'));
+   case 'interview':return active&&rounds.some(r=>!r.cancelled&&r.time&&r.feedback.status!=='submitted'&&new Date(r.time).getTime()>now);
+   case 'feedback':return !app.withdrawnAt&&rounds.some(r=>!r.cancelled&&r.time&&r.feedback.status!=='submitted'&&(['draft','returned'].includes(r.feedback.status)||new Date(r.time).getTime()<=now));
+   case 'submitted':return rounds.some(r=>r.feedback.status==='submitted');
+   default:return false;
+  }
+ }));
+}
 export function upcomingInterviewGroups(groups){
  return groups.filter(group=>group.upcoming.length).sort((a,b)=>new Date(a.upcoming[0].round.time)-new Date(b.upcoming[0].round.time));
 }

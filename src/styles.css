@@ -255,3 +255,5 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 @media(max-width:650px){.hr-decision-panel{padding:16px;gap:16px}.hr-decision-panel .actions{width:100%;gap:8px}.hr-decision-panel .actions button{min-height:40px}.hr-progression-feedback{padding:14px}}
 
 .review-supplements{min-width:0;margin-top:12px}.review-supplement-entry{padding:12px 14px;margin:8px 0;border-left:3px solid #dadce0;background:#f8fafd;border-radius:0 6px 6px 0}.review-supplement-entry p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}.review-supplement-entry strong{font-weight:500}.screening-panel>div,.review-confirmation-content{min-width:0}.interview-candidate-records>.screening-communication{margin:4px 0 20px}.interview-candidate-records .screening-communication p{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.interview-filter-panel{margin:0 0 20px}.interview-filters{margin:0 0 8px}.interview-filter-summary{margin:0;font-size:var(--text-caption)}@media(max-width:650px){.interview-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.interview-filters select{width:100%}.interview-filters .text-button{justify-self:start}}

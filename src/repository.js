@@ -72,8 +72,9 @@ export const setAccountFrozen=(id,frozen)=>request('/users/'+encodeURIComponent(
 
 export const resetAccountPassword=(id,password)=>request('/users/'+encodeURIComponent(id)+'/password',{method:'POST',body:JSON.stringify({password})});
 
-export async function loadCandidate(id){
- const result=await request('/candidates/'+encodeURIComponent(id));
+export async function loadCandidate(id,{signal}={}){
+ const result=await request('/candidates/'+encodeURIComponent(id),{signal});
+ signal?.throwIfAborted();
  if(!baseline||result.revision!==baseline.revision)throw Object.assign(Error('数据已更新，请刷新页面后重试'),{status:409});
  const candidates=baseline.candidates.filter(c=>c.id!==id);candidates.push(result.candidate);baseline={...baseline,candidates};return structuredClone(baseline);
 }

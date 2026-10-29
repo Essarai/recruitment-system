@@ -97,3 +97,18 @@ test('HR 补充独立提交当前轮次和说明，携带已加载档案 ID，�
  globalThis.fetch=async(path,options={})=>{if(options.method==='POST'){assert.equal(path,'/api/applications/app/review-supplement');sent=JSON.parse(options.body);return Response.json({...data,revision:8});}if(path==='/api/state/version')return Response.json({revision:8,directoryVersion:'qa',userId:'hr'});return Response.json({user:{id:'hr',role:'HR'},data,directoryVersion:'qa'});};
  try{await load();await supplementResumeReview('app','round','已核实补充信息','面试官');assert.deepEqual(sent,{revision:7,roundId:'round',response:'已核实补充信息',interviewer:'面试官',candidateIds:['full']});assert.equal(await readUpdates(),null);}finally{globalThis.fetch=original;}
 });
+
+test('离开记忆中的详情页后，取消的资料读取不能更新当前数据基线',async()=>{
+ const {loadCandidate,readUpdates}=await import('../src/repository.js'),original=globalThis.fetch,calls=[];
+ const controller=new AbortController();let release;
+ globalThis.fetch=async(path,options={})=>{
+  calls.push(path);
+  if(path.startsWith('/api/candidates/')){assert.equal(options.signal,controller.signal);await new Promise(resolve=>release=resolve);return Response.json({revision:4,candidate:{id:'a',notes:'已取消的结果'}});}
+  return Response.json({user:{id:'hr',role:'HR'},data:{revision:4,partialCandidates:true,candidates:[{id:'a',name:'候选人',_summary:true}],applications:[]}});
+ };
+ try{
+  await load();const pending=loadCandidate('a',{signal:controller.signal});controller.abort();release();
+  await assert.rejects(pending,e=>e.name==='AbortError');await readUpdates({force:true});
+  assert.equal(calls.at(-1),'/api/state?compact=1&candidateIds=');
+ }finally{globalThis.fetch=original;}
+});

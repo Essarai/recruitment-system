@@ -9,8 +9,8 @@ import {useResumeSearch} from './useResumeSearch';
 import {resumeSearchTerms} from './resume-search';
 import {workExperienceLabel,applicationStage,candidateResumes,canCreateApplication,educationOptions,profileFields} from './model';
 
-function CommunicationNote({notes}){
- const id=useId(),content=useRef(null),[expanded,setExpanded]=useState(false),[height,setHeight]=useState(0);
+function CommunicationNote({notes,candidateId}){
+ const id=useId(),content=useRef(null),[expanded,setExpanded]=useViewState('library:notes:'+candidateId,false),[height,setHeight]=useState(0);
  useEffect(()=>{const element=content.current;const observer=new ResizeObserver(()=>setHeight(element.scrollHeight));observer.observe(element);setHeight(element.scrollHeight);return()=>observer.disconnect();},[notes]);
  return <div className="communication-note"><div id={id} className="communication-note-clip" style={{maxHeight:expanded?Math.max(60,height):60}}><p ref={content}>{notes||'暂无备注'}</p></div>{height>61&&<button type="button" className="text-button communication-note-toggle" aria-expanded={expanded} aria-controls={id} onClick={()=>setExpanded(value=>!value)}>{expanded?'收起':'展开全文'}<span aria-hidden="true" style={{transform:expanded?'rotate(180deg)':undefined}}>⌄</span></button>}</div>;
 }
@@ -27,7 +27,7 @@ export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
  const candidates=result?.items||[];
  function removeTerm(index){onQueryChange(terms.filter((_,i)=>i!==index).map(t=>t.token).join(' + '));}
 
- return <section className="resume-library">
+ return <section className="resume-library" aria-busy={loading}>
   <div className="title-row"><div><h1>简历库</h1><p className="muted">顶部支持组合检索，例如“阿里 + 2年经验”；多个条件同时满足。</p></div><button className="primary" onClick={()=>open('import')}>导入简历</button></div>
   <MobileSearch value={query} onChange={onQueryChange} placeholder="例如：阿里 + 2年经验"/>
   {terms.length>0&&<div className="resume-query-summary">{terms.map((term,index)=><button className="search-condition" type="button" key={`${index}-${term.token}`} aria-label={`移除条件 ${term.label}`} onClick={()=>removeTerm(index)}>{term.label}<span aria-hidden="true">×</span></button>)}<small className="muted" role="status">匹配 {result?.total??'…'} / {result?.libraryTotal??'…'} 人</small><button className="text-button" onClick={()=>onQueryChange('')}>清空条件</button></div>}
@@ -37,7 +37,7 @@ export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
    {candidates.map(({candidate:c,applicationCount,active,job,stage,files})=>{
     return <tr key={c.id}>
      <td className="library-candidate-details"><div className="candidate-identity"><button className="name-link candidate-name" title={c.name} onClick={()=>archive(c.id)}>{c.name}</button><span className="candidate-application-summary">{applicationCount?<><span title={`投递岗位：${job}`}>投递岗位：{job}</span><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span></>:<span>暂无应聘记录</span>}</span></div><CandidateBrief candidate={c} showNotes={false}/></td>
-     <td className="library-notes"><CommunicationNote notes={c.notes}/></td>
+     <td className="library-notes"><CommunicationNote candidateId={c.id} notes={c.notes}/></td>
      <td><div className="library-actions"><button className="text-button" onClick={()=>archive(c.id)}>查看档案</button><MoreArchiveActions>{files[0]?.id&&<ResumeLink app={{resume:files[0]}} className="text-button">{files[0].name.toLowerCase().endsWith('.pdf')?'预览简历':'下载简历'}</ResumeLink>}<button className="text-button" onClick={()=>open('candidate',{candidateId:c.id})}>编辑资料</button><button className="text-button" onClick={()=>open('candidateResume',{candidateId:c.id})}>更新简历</button>{!active&&<button className="text-button" onClick={()=>open('createApplication',{candidateId:c.id})}>{applicationCount?'重新捞起':'创建应聘'}</button>}</MoreArchiveActions></div><small className="sub library-version-count">{files.length?`${files.length} 份简历版本`:'暂无简历附件'}</small></td>
     </tr>;
    })}

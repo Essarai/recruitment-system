@@ -1,3 +1,4 @@
+import {useViewState} from './ViewState';
 import {MobileSearch} from './MobileSearch';
 import closeIcon from '@material-design-icons/svg/outlined/close.svg';
 import {CandidateBrief} from './CandidateBrief';
@@ -21,7 +22,7 @@ function MoreArchiveActions({children}){
 
 export function ResumeLibrary({data,query,open,archive,onQueryChange=()=>{}}){
  const terms=resumeSearchTerms(query);
- const [size,setSize]=useState(20);
+ const [size,setSize]=useViewState('library:size',20);
  const {result,loading,error,page,setPage,retry}=useResumeSearch(query,data.revision,size);
  const candidates=result?.items||[];
  function removeTerm(index){onQueryChange(terms.filter((_,i)=>i!==index).map(t=>t.token).join(' + '));}
@@ -55,9 +56,9 @@ export function CandidateArchive({candidate:c,data,open,manage,back,date}){
   <div className="title-row"><div><h1>{c.name}</h1><p className="muted">候选人档案 · {apps.length} 次应聘 · {files.length} 份简历版本</p></div><div className="actions"><button onClick={()=>open('candidate',{candidateId:c.id})}>编辑资料</button><button onClick={()=>open('candidateResume',{candidateId:c.id})}>更新简历</button>{canCreateApplication(data.applications,c.id)&&<button onClick={()=>open('createApplication',{candidateId:c.id})}>{apps.length?'重新捞起':'创建应聘'}</button>}</div></div>
   <section className="candidate-profile" aria-label="候选人档案资料"><dl>{[['phone','手机号'],['email','邮箱'],...profileFields].map(([key,label])=><div key={key}><dt>{label}</dt><dd>{key==='phone'&&c.phone?<a href={'tel:'+c.phone}>{c.phone}</a>:key==='email'&&c.email?<a href={'mailto:'+c.email}>{c.email}</a>:key==='education'&&!educationOptions.includes(c.education)?'待补充分类':key==='experience'?workExperienceLabel(c[key])||'待补充':c[key]||'待补充'}</dd></div>)}</dl><div className="candidate-notes"><span>HR 前置沟通记录</span><p>{c.notes||'暂无备注'}</p></div></section>
   <div className="section-heading"><h2>简历版本</h2><span className="muted">更新简历不会改写已有应聘附件</span></div>
-  <PaginatedList items={files} resetKey={c.id} label="简历版本">{rows=><div className="resume-versions">{rows.map((file,i)=><div className="resume-version" key={file.id}><ResumeLink app={{resume:file}} className="text-button">{file.name}</ResumeLink><span className="muted">{file.id===files[0]?.id?'最近版本 · ':''}{file.uploadedAt?date(file.uploadedAt):'历史简历'}</span></div>)}</div>}</PaginatedList>
+  <PaginatedList items={files} stateKey={'archive:'+c.id+':files'} resetKey={c.id} label="简历版本">{rows=><div className="resume-versions">{rows.map((file,i)=><div className="resume-version" key={file.id}><ResumeLink app={{resume:file}} className="text-button">{file.name}</ResumeLink><span className="muted">{file.id===files[0]?.id?'最近版本 · ':''}{file.uploadedAt?date(file.uploadedAt):'历史简历'}</span></div>)}</div>}</PaginatedList>
   <div className="section-heading"><h2>历次应聘与简历</h2><span className="muted archive-hint">需要安排面试或记录结果时，前往应聘列表处理</span></div>
-  <PaginatedList items={apps} resetKey={c.id} label="应聘历史">{rows=><div className="table-wrap"><table><thead><tr><th>应聘岗位／流程</th><th>创建时间</th><th>进度／结果摘要</th><th>该次简历版本</th><th>记录入口</th></tr></thead><tbody>{rows.map(a=>{const stage=applicationStage(a),created=a.history.find(h=>h.action.startsWith('创建应聘'))?.at;return <tr key={a.id}><td>{a.job}</td><td>{created?date(created):'未记录'}</td><td><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span>{a.reason&&<small className="sub">{a.reason}</small>}</td><td><ResumeLink app={a} className="text-button archive-resume">{a.resume?.name||'暂无附件'}</ResumeLink></td><td><button className="text-button" onClick={()=>manage(a.id)}>前往应聘</button></td></tr>;})}</tbody></table></div>}</PaginatedList>
+  <PaginatedList items={apps} stateKey={'archive:'+c.id+':applications'} resetKey={c.id} label="应聘历史">{rows=><div className="table-wrap"><table><thead><tr><th>应聘岗位／流程</th><th>创建时间</th><th>进度／结果摘要</th><th>该次简历版本</th><th>记录入口</th></tr></thead><tbody>{rows.map(a=>{const stage=applicationStage(a),created=a.history.find(h=>h.action.startsWith('创建应聘'))?.at;return <tr key={a.id}><td>{a.job}</td><td>{created?date(created):'未记录'}</td><td><span className={`stage-label stage-${stage.tone}`}>{stage.name}</span>{a.reason&&<small className="sub">{a.reason}</small>}</td><td><ResumeLink app={a} className="text-button archive-resume">{a.resume?.name||'暂无附件'}</ResumeLink></td><td><button className="text-button" onClick={()=>manage(a.id)}>前往应聘</button></td></tr>;})}</tbody></table></div>}</PaginatedList>
   {!apps.length&&<div className="empty">暂无应聘历史，可为这位候选人创建新应聘。</div>}
  </section>;
 }

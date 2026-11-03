@@ -15,6 +15,7 @@ export async function syncFeishuJob(job,client,origin,checkpoint){
   if(!r.messageId){const value=await client.call('/im/v1/messages?receive_id_type=open_id',{method:'POST',body:{receive_id:t.openId,msg_type:'interactive',uuid:r.uuid,content:JSON.stringify(reviewCard(t,origin))}});if(!value.message_id)throw Error('飞书未返回通知 ID');r.messageId=value.message_id;r.openId=t.openId;r.reviewEpoch=t.screeningAt;await checkpoint(r);}
   return {...r,closed:false};
  }
+ if(!t.active&&t.keepPastEvent)return {...r,closed:true,proposal:null};
  if(t.calendarSource==='external'){
   if(r.eventId&&!r.closed)await client.call(eventPath(r),{method:'DELETE'});
   return {...r,closed:true,proposal:null,rsvp:'',checkedAt:null};

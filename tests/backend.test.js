@@ -174,7 +174,7 @@ test('面试官可见推荐 HR，优先实际推送人，旧记录回退发起�
 
 test('HR 手动结束流程必须清零待提交面评，含未来安排和草稿，不能同次取消来绕过',()=>{
  const names=['面试官甲','面试官乙'];
- for(const status of ['公司决定录用','未录用','候选人退出']){
+ for(const status of ['公司决定录用','未录用']){
   const before=state();const next=visibleState(before,{role:'HR'},[],1);next.applications[0].status=status;next.applications[0].reason='HR 手动结束';
   assert.throws(()=>validateHRState(before,next,names,[file],'HR'),/初试.*先完成面评/);
   next.applications[0].rounds[0].cancelled=true;assert.throws(()=>validateHRState(before,next,names,[file],'HR'),/面评未正式提交/);

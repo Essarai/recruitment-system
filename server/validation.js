@@ -60,13 +60,18 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   if(!candidates.some(c=>c.id===candidateId))throw Error('应聘关联的候选人不存在');
   const next={...(old?.archivedAt?{archivedAt:old.archivedAt,archivedBy:old.archivedBy}:{}),...(old?.withdrawnAt?{withdrawnAt:old.withdrawnAt,withdrawnBy:old.withdrawnBy}:{}),...(old?.createdBy?{createdBy:old.createdBy}:!old&&actorUser?{createdBy:actorUser.id}:{}),id:id(a.id),candidateId,templateId:old?.templateId,job:text(a.job,'岗位',160,true),...(old?.jd!==undefined?{jd:old.jd}:{}),status:a.status,reason:text(a.reason,'结束原因',2000),endedAt:old?.endedAt||undefined,resume:null,rounds:[],history:old?.history||[]};
   if(old&&(old.candidateId!==candidateId||old.job!==next.job))throw Error('不能更换已有应聘的候选人或岗位');
-  if(old){if(old.status!==a.status){validateHREndApplication(old);const ended=endApplication(old,a.status,next.reason);next.endedAt=ended.endedAt;}else if(old.reason!==next.reason)throw Error('不能改写已保存的结束原因');}
+  if(old){if(old.status!==a.status){validateHREndApplication(old,a.status);const ended=endApplication(old,a.status,next.reason,now);next.endedAt=ended.endedAt;}else if(old.reason!==next.reason)throw Error('不能改写已保存的结束原因');}
   else if(a.status!=='进行中'||next.reason)throw Error('新应聘必须为进行中');
   if(!old){if(!canCreateApplication(previous.applications,candidateId)||newApplicants.has(candidateId))throw Error('该候选人已有进行中的应聘，请先结束现有流程');newApplicants.add(candidateId);const template=templates.find(t=>t.id===a.templateId);if(!template||a.job!==template.name)throw Error('应聘岗位必须来自所选流程名称');if(!Array.isArray(a.rounds)||a.rounds.length!==template.nodes.length||a.rounds.some((r,i)=>r.name!==template.nodes[i].name))throw Error('面试节点须与所选流程一致');next.templateId=template.id;next.jd=template.jd;candidateDetails(candidates.find(c=>c.id===candidateId),true);validateHRNotes(candidates.find(c=>c.id===candidateId).notes);}
   if(!a.resume?.id)throw Error('每次应聘必须关联已上传的简历');
   const file=files.find(f=>f.id===a.resume.id);if(!file)throw Error('简历附件不存在，请重新上传');
   next.resume={id:file.id,name:file.name,size:file.size,type:file.mime};
   if(old&&!equal(old.resume,next.resume))throw Error('已有应聘的简历版本不能覆盖，请创建新的应聘记录');
+  if(old?.status==='进行中'&&a.status==='候选人退出'){
+   const rounds=array(a.rounds,'面试轮次',50).map(r=>{const before=old.rounds.find(x=>x.id===r.id);if(before&&r.feedback?.status!==before.feedback.status)throw Error('候选人退出时不能同时修改面评');return before?{...r,feedback:before.feedback}:r;});
+   const stopped=endApplication(old,a.status,next.reason,now);
+   if((!equal(old.rounds,rounds)&&!equal(stopped.rounds,rounds))||!equal(old.screening,a.screening))throw Error('候选人退出时不能同时修改面试安排或审核，请分别操作');
+  }
   const screening=normalizeScreening(old,a,interviewers,actor);if(screening?.interviewer&&!equal(old?.screening,screening)&&!activeInterviewers.includes(screening.interviewer))throw Error('不能向已冻结的面试官推送简历');if(screening)next.screening=screening;
   next.rounds=array(a.rounds,'面试轮次',50).map((r,index)=>{
    const oldRound=old?.rounds.find(x=>x.id===r.id);
@@ -89,6 +94,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
     if(result.time){if(index>0&&!oldRound)throw Error('新增轮次须先完成本轮简历审核，再安排面试');validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
     else if(oldRound?.time||result.location||result.focus)throw Error('请完整填写面试安排');
    }
+   if(old&&old.status!=='进行中'&&oldRound?.cancelled!==result.cancelled)throw Error('应聘已结束，不能变更安排');
    if(result.cancelled&&!oldRound)throw Error('新节点不能直接取消');
    if(result.cancelled&&oldRound?.feedback.status==='submitted')throw Error('已有正式面评不能取消');
    if(!oldRound&&r.feedback?.status!=='none')throw Error('HR 不能代录面评');

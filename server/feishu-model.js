@@ -20,7 +20,7 @@ export function feishuDesired(state,users,config,now=Date.now()){
    const active=a.status==='进行中'&&!a.withdrawnAt&&!r.cancelled;
    if(active&&end<now)continue;
    const who=person(r.interviewer);
-   items.push({id:`round:${a.id}:${r.id}`,kind:'round',appId:a.id,roundId:r.id,active,userId:who?.userId||'',openId:who?.openId||'',name,job:a.job,title:`面试｜${name}｜${a.job}｜${r.name}`,start,end,time:r.time,duration:r.duration||60,mode:r.mode,location:r.location,focus:r.focus||'',calendarId:config.calendarId,allowAttendeeEdit:!!config.allowAttendeeEdit});
+   items.push({id:`round:${a.id}:${r.id}`,kind:'round',appId:a.id,roundId:r.id,active,...(a.status==='候选人退出'&&!r.cancelled&&start<=Date.parse(a.endedAt)?{keepPastEvent:true}:{}),userId:who?.userId||'',openId:who?.openId||'',name,job:a.job,title:`面试｜${name}｜${a.job}｜${r.name}`,start,end,time:r.time,duration:r.duration||60,mode:r.mode,location:r.location,focus:r.focus||'',calendarId:config.calendarId,allowAttendeeEdit:!!config.allowAttendeeEdit});
   }
  }
  return config.pilotUserId?items.filter(item=>item.userId===config.pilotUserId):items;

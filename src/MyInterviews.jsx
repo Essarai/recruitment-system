@@ -5,7 +5,7 @@ import {ReviewSupplementHistory} from './ReviewSupplementHistory';
 import React,{useEffect,useState} from 'react';
 import {PaginatedList} from './PaginatedList';
 import {ResumeLink} from './ResumeLink';
-import {applicationStatus,roundTone} from './model';
+import {applicationStatus,applicationResultLabel,roundTone} from './model';
 import {interviewGroups,upcomingInterviewGroups,filterInterviewGroups,interviewProgressFilters} from './interview-groups';
 
 export function MyInterviews({data,person,query,refresh,open,accept,busy,date,feedbackLabel,onAvailability}){
@@ -34,7 +34,7 @@ export function MyInterviews({data,person,query,refresh,open,accept,busy,date,fe
    <details className="interview-candidate" open={Boolean(expanded[group.candidate.id])} onToggle={e=>{const isOpen=e.currentTarget.open;setExpanded(current=>Boolean(current[group.candidate.id])===isOpen?current:{...current,[group.candidate.id]:isOpen});}}>
    <summary><span>{view==='all'?'应聘与面试记录':'完整记录'} · {group.applications.length} 次应聘 · {group.roundCount} 轮面试</span><span className="expand-hint" aria-hidden="true"/></summary>
    <div className="interview-candidate-records">{group.candidate.notes&&!group.tasks.some(t=>['screening','roundReview'].includes(t.kind))&&<section className="screening-communication"><strong>HR 前置沟通记录</strong><p>{group.candidate.notes}</p></section>}{group.applications.map(({app,rounds,screening})=><section className="interview-application" key={app.id}>
-    <div className="interview-application-heading"><div><h3>{app.job}</h3><span className={`stage-label stage-${app.status==='进行中'?'interview':app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'}`}>{applicationStatus(app)}</span></div><ResumeLink app={app} className="text-button">查看本次简历</ResumeLink></div>
+    <div className="interview-application-heading"><div><h3>{app.job}</h3><span className={`stage-label stage-${app.status==='进行中'?'interview':app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'}`}>{applicationResultLabel(app)}</span></div><ResumeLink app={app} className="text-button">查看本次简历</ResumeLink></div>
     <p className="muted">推荐 HR：{app.recommendedBy||app.screening?.sentBy||'未记录'}</p>
     {app.jd&&<RememberedDetails stateKey={'interview:'+app.id+':jd'} className="job-description"><summary>岗位 JD</summary><p>{app.jd}</p></RememberedDetails>}
     {screening&&<div className="interview-child review-confirmation"><div className="review-confirmation-content"><div className="review-confirmation-heading"><h3>简历确认</h3>{app.reviewTerminationTargets?.some(t=>!t.roundId)&&<button className="text-button" disabled={busy} onClick={()=>open('endReviewed',{appId:app.id,roundId:null})}>结束流程</button>}</div><p className="muted">{app.screening.status==='needs_info'?'等待 HR 补充说明后重新送审':app.screening.status==='declined'?`简历确认不通过：${app.screening.reason}`:app.status!=='进行中'?'简历确认记录已保留，本次应聘已结束':app.screening.status==='pending'?'待你审核简历，与各轮面试安排独立':app.screening.firstInterviewScheduled?'简历已确认通过，首轮面试已安排':app.screening.interviewsScheduled?'简历已确认通过，面试已安排':'简历已确认通过，待 HR 安排首轮面试'}</p><ReviewSupplementHistory review={app.screening}/></div>{app.status==='进行中'&&app.screening.status==='pending'&&<div className="actions"><button className="text-button" disabled={busy} onClick={()=>open('screeningDecision',{appId:app.id,decision:'needs_info'})}>需 HR 补充</button><button className="text-button" disabled={busy} onClick={()=>open('screeningDecision',{appId:app.id})}>不通过</button><button disabled={busy} onClick={()=>accept(app.id)}>确认通过</button></div>}</div>}

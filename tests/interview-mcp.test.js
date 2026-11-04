@@ -70,3 +70,32 @@ test('写入工具要求专用权限、本轮有效安排及逐次确认；仅�
   state.applications[0].rounds[0].feedback.status='submitted';assert.equal((await client.callTool({name:'save_my_feedback_draft',arguments:{...base,confirmed:true}})).isError,true);assert.equal(writes,2);
  }finally{await client.close();await server.close();}
 });
+
+test('管理员 MCP 只读查询团队资料，隔离私人草稿并拒绝草稿附件和写工具',async()=>{
+ const {createAdminMcp}=await import('../server/mcp.js'),state=fixture(),admin={id:'admin',name:'管理员',role:'admin',canWrite:true};
+ assert.throws(()=>createAdminMcp({user:{role:'HR'}}),/仅管理员/);
+ const server=createAdminMcp({user:admin,loadState:async()=>state,fileAccess:async file=>({id:file.id,url:'https://example.com/signed'})});
+ const client=new Client({name:'admin-test',version:'1.0.0'}),[ct,st]=InMemoryTransport.createLinkedPair();
+ try{
+  await server.connect(st);await client.connect(ct);
+  const tools=await client.listTools();assert.deepEqual(tools.tools.map(t=>t.name).sort(),['get_application','get_recruitment_file','list_applications','list_candidates']);assert.ok(tools.tools.every(t=>t.annotations.readOnlyHint));
+  const call=async(name,args)=>{const result=await client.callTool({name,arguments:args});return {result,value:result.isError?null:JSON.parse(result.content[0].text)};};
+  const list=await call('list_applications',{offset:0,limit:1});assert.equal(list.value.items.length,1);assert.ok(list.value.total>=1);
+  const detail=await call('get_application',{applicationId:'a0'});assert.equal(detail.value.candidate.notes,'HR 私有备注');assert.equal(detail.value.application.rounds[0].feedback.summary,undefined);assert.equal(detail.value.application.rounds[0].feedback.transcript,undefined);assert.equal(detail.value.application.rounds[1].feedback.summary,'其他面试官面评');
+  assert.equal((await call('get_recruitment_file',{applicationId:'a0',kind:'transcript',roundId:state.applications[0].rounds[0].id})).result.isError,true);
+  assert.equal((await call('get_recruitment_file',{applicationId:'a0',kind:'transcript',roundId:state.applications[0].rounds[1].id})).value.id,'other-file');
+  assert.equal((await call('list_candidates',{search:'HR 私有备注',offset:0,limit:1})).value.total,1);
+ }finally{await client.close();await server.close();}
+});
+
+test('管理员 Token 强制只读，普通 HR 不能创建，面试官可选择草稿权限',async()=>{
+ const {mountMcpTokenManagement}=await import('../server/mcp.js'),routes={};let stored;
+ const app={get:(path,...handlers)=>{routes['GET'+path]=handlers;},post:(path,...handlers)=>{routes['POST'+path]=handlers;},delete:()=>{}};
+ mountMcpTokenManagement(app,{pool:{execute:async(sql,args)=>{stored=args;return [[]];}},newToken:()=> 'a'.repeat(64)});
+ const handlers=routes['POST/api/mcp-token'];let rejected=false;
+ handlers[0]({user:{role:'HR'}},{status:code=>{assert.equal(code,403);return {json:()=>{rejected=true;}};}},()=>assert.fail());assert.ok(rejected);
+ for(const [role,expected] of [['admin',false],['interviewer',true]]){
+  let value;await handlers.at(-1)({user:{id:'test',role},body:{canWrite:true}},{json:result=>{value=result;}});
+  assert.equal(value.canWrite,expected);assert.equal(stored.at(-1),expected);
+ }
+});

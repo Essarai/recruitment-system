@@ -7,3 +7,8 @@ test('预设提示词包含实际地址、Codex 配置、匹配确认和草稿�
  assert.throws(()=>interviewPrompt('https://recruitment.example/mcp'),/先创建个人 Token/);
  assert.throws(()=>interviewPrompt('https://recruitment.example/mcp','invalid'),/先创建个人 Token/);
 });
+
+test('管理员提示词使用独立配置及只读工具',async()=>{
+ const {adminPrompt}=await import('../src/mcp-prompt.js');const prompt=adminPrompt('https://example.com/mcp','recruit_mcp_'+'a'.repeat(64));
+ assert.match(prompt,/mcp_servers\.recruitment-admin/);assert.match(prompt,/list_candidates/);assert.doesNotMatch(prompt,/save_my_feedback_draft|upload_my_transcript/);
+});

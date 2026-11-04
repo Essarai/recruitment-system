@@ -55,7 +55,7 @@ export async function save(next,onProgress=()=>{},feedbackTarget=null,candidateT
    feedback.transcript=await transcriptUploads.get(file);
   }
   onProgress('正在保存面评…');
-  result=await request(`/applications/${encodeURIComponent(app.id)}/rounds/${encodeURIComponent(round.id)}/feedback`,{method:'PATCH',body:JSON.stringify({revision:baseline.revision,feedback,draft:round.feedback.status!=='submitted',completed:round.feedback.status==='submitted'})});
+  result=await request(`/applications/${encodeURIComponent(app.id)}/rounds/${encodeURIComponent(round.id)}/feedback`,{method:'PATCH',body:JSON.stringify({revision:baseline.revision,feedback,draft:round.feedback.status!=='submitted'})});
  }
  baseline=structuredClone(result);return result;
 }

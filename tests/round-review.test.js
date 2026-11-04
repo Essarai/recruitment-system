@@ -56,7 +56,7 @@ test('真实面评保存路径在正式通过时创建审核，草稿/待定不�
   const state=make();state.applications[0].rounds[0].feedback={status:'none'};let persisted;
   const conn={beginTransaction:async()=>{},query:async sql=>sql.includes('recruitment_state')?[[{revision:1,payload:state}]]:[people],execute:async(sql,args)=>{if(sql.startsWith('UPDATE recruitment_state'))persisted=JSON.parse(args[0]);return [{}]},commit:async()=>{},rollback:async()=>{},release(){}};
   const pool={getConnection:async()=>conn,query:async()=>[people]};
-  await saveInterviewFeedback(pool,people[1],'a','r1',{revision:1,draft,completed:true,feedback:{summary:'实际面试评价',conclusion}});
+  await saveInterviewFeedback(pool,people[1],'a','r1',{revision:1,draft,feedback:{summary:'实际面试评价',conclusion}});
   assert.equal(!!persisted.applications[0].rounds[1].review,expected);if(expected)assert.equal(persisted.applications[0].rounds[1].review.interviewer,'二面官');
  }
 });

@@ -2,8 +2,8 @@ import {seed} from './fixtures.js';
 import {test} from 'node:test';import assert from 'node:assert/strict';
 import {pending,validateSchedule,submitFeedback,endApplication} from '../src/model.js';
 test('下一轮安排不清除上一轮面评，模板修改不影响已有轮次',()=>{const s=seed(),a=s.applications[0];assert.equal(pending(a),2);validateSchedule(a,a.rounds[1],{interviewer:'周宁',time:'2026-10-20T14:00',mode:'线上',location:'https://example.com'});assert.equal(a.rounds[0].feedback.status,'none');s.templates[0].nodes[0]='筛选';assert.equal(a.rounds[0].name,'初试');});
-test('提交要求本人、完成确认和必填字段；不自动推进',()=>{const a=seed().applications[0],r=a.rounds[0],f={summary:'依据充分',conclusion:'建议通过'};assert.throws(()=>submitFeedback(a,r,'周宁',f,true));assert.throws(()=>submitFeedback(a,r,'陈晨',f,false));assert.equal(submitFeedback(a,r,'陈晨',f,true).status,'submitted');assert.equal(a.status,'进行中');r.cancelled=true;assert.throws(()=>submitFeedback(a,r,'陈晨',f,true));});
-test('结束允许欠评，禁止新增安排，允许原面试官补交',()=>{const a=seed().applications[0];assert.throws(()=>endApplication(a,'公司决定录用',''));const ended=endApplication(a,'公司决定录用','确认录用');assert.equal(pending(ended),2);assert.throws(()=>validateSchedule(ended,ended.rounds[2],{}));assert.equal(submitFeedback(ended,ended.rounds[0],'陈晨',{summary:'补交',conclusion:'建议通过'},true).status,'submitted');});
+test('提交要求本人和必填字段，无需额外完成确认；不自动推进',()=>{const a=seed().applications[0],r=a.rounds[0],f={summary:'依据充分',conclusion:'建议通过'};assert.throws(()=>submitFeedback(a,r,'周宁',f));assert.throws(()=>submitFeedback(a,r,'陈晨',{...f,summary:' '}));assert.equal(submitFeedback(a,r,'陈晨',f).status,'submitted');assert.equal(a.status,'进行中');r.cancelled=true;assert.throws(()=>submitFeedback(a,r,'陈晨',f));});
+test('结束允许欠评，禁止新增安排，允许原面试官补交',()=>{const a=seed().applications[0];assert.throws(()=>endApplication(a,'公司决定录用',''));const ended=endApplication(a,'公司决定录用','确认录用');assert.equal(pending(ended),2);assert.throws(()=>validateSchedule(ended,ended.rounds[2],{}));assert.equal(submitFeedback(ended,ended.rounds[0],'陈晨',{summary:'补交',conclusion:'建议通过'}).status,'submitted');});
 
 test('会议链接允许 HR 手动输入常见会议 URL，拒绝非网页协议和无效地址',()=>{const a=seed().applications[0],r=a.rounds[1];for(const location of ['https://meeting.tencent.com/dm/demo','https://meet.feishu.cn/demo?code=123'])validateSchedule(a,r,{interviewer:r.interviewer,time:r.time,mode:'线上',location});for(const location of ['javascript:alert(1)','https://','https://user:secret@example.com'])assert.throws(()=>validateSchedule(a,r,{interviewer:r.interviewer,time:r.time,mode:'线上',location}));});
 test('候选人扩展资料兼容旧记录，清理空白且不混入应聘字段',async()=>{const {candidateDetails}=await import('../src/model.js');assert.equal(candidateDetails({}).company,'');assert.deepEqual(candidateDetails({company:' 示例公司 ',experience:'5 年',notes:' 待沟通 ',job:'PM'}),{age:'',highestEducation:'',experience:'5 年',company:'示例公司',currentTitle:'',education:'',city:'',notes:'待沟通'});});
@@ -101,14 +101,13 @@ test('待定可正式提交，保留应聘和后续安排，进度显示待定�
  const {terminateFailedApplication,roundTone,applicationProgress}=await import('../src/model.js');
  const app=seed().applications[0],r=app.rounds[0],f={summary:'关键能力尚需验证，交由 HR 协调后续',conclusion:'待定'};
  const before=structuredClone(app.rounds.slice(1));
- assert.throws(()=>submitFeedback(app,r,'陈晨',f,false));
- assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,summary:' '},true));
- r.feedback=submitFeedback(app,r,'陈晨',f,true);
+ assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,summary:' '}));
+ r.feedback=submitFeedback(app,r,'陈晨',f);
  assert.equal(r.feedback.status,'submitted');assert.equal(r.feedback.conclusion,'待定');
  assert.equal(terminateFailedApplication(app,'陈晨'),false);assert.equal(app.status,'进行中');
  assert.deepEqual(app.rounds.slice(1),before);assert.equal(roundTone(r),'pending');
  const step=applicationProgress(app).find(s=>s.id===r.id);assert.equal(step.done,true);assert.equal(step.tone,'pending');
- assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,conclusion:'建议通过'},true),/锁定/);
+ assert.throws(()=>submitFeedback(app,r,'陈晨',{...f,conclusion:'建议通过'}),/锁定/);
 });
 
 test('候选人最高学历独立于学历背景，所有候选人资料必填且旧档案可读取',async()=>{

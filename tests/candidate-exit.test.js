@@ -68,7 +68,7 @@ test('本人可在退出后补交已完成面评，负面结论也不改写退�
  const s=exit(fixture()),pool=feedbackPool(s),a=s.applications[0],endedAt=a.endedAt;
  await assert.rejects(saveInterviewFeedback(pool,interviewer,'a','future',{revision:1}),e=>e.status===403);
  await assert.rejects(saveInterviewFeedback(pool,{...interviewer,name:'其他人'},'a','past',{revision:1}),e=>e.status===403);
- const saved=await saveInterviewFeedback(pool,interviewer,'a','past',{revision:1,completed:true,feedback:{summary:'补交实际完成面试的评价',conclusion:'建议不通过'}});
+ const saved=await saveInterviewFeedback(pool,interviewer,'a','past',{revision:1,feedback:{summary:'补交实际完成面试的评价',conclusion:'建议不通过'}});
  assert.equal(saved.applications[0].rounds.find(r=>r.id==='past').feedback.status,'submitted');
  assert.equal(s.applications[0].status,'候选人退出');assert.equal(s.applications[0].reason,reason);assert.equal(s.applications[0].endedAt,endedAt);
  await assert.rejects(saveInterviewFeedback(pool,interviewer,'a','past',{revision:2}),/已提交/);

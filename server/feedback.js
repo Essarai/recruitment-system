@@ -15,7 +15,7 @@ export async function saveInterviewFeedback(pool,user,appId,roundId,body){
   const input=body.feedback||{},f={summary:text(input.summary,'综合评价',10000),strengths:text(input.strengths,'优势',5000),concerns:text(input.concerns,'待验证事项',5000),conclusion:text(input.conclusion,'建议结论',20)};
   const transcript=await transcriptReference(conn,input.transcript,r.feedback.transcript,a.id,r.id,user);if(transcript)f.transcript=transcript;
   if(body.draft)r.feedback={...f,status:r.feedback.status==='returned'?'returned':'draft',author:user.name,returnReason:r.feedback.returnReason||''};
-  else r.feedback=submitFeedback(a,r,user.name,f,body.completed===true);
+  else r.feedback=submitFeedback(a,r,user.name,f);
   if(!body.draft){terminateFailedApplication(a,user.name);activateRoundReviews(a,applicationCreatorName(a,await users(conn)));}
   a.history.unshift({at:new Date().toISOString(),actor:user.name,action:body.draft?'保存面评草稿':'提交面评'});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[user.id,body.draft?'保存面评草稿':'提交面评',r.id]);await conn.commit();return visibleState(state,user,await users(pool),revision+1);

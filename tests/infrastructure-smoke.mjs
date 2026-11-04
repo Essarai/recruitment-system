@@ -119,12 +119,12 @@ try{
 
  hrState.candidates.find(c=>c.id===ids.candidate).city='联调城市';await api('/state',{method:'POST',cookie:hr,body:hrState});
  let own=(await api('/state',{cookie:interviewer})).value.data;assert.equal(own.applications[0].rounds[0].feedback.summary,'联调草稿');
- await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:own.revision,completed:false,feedback:{summary:'联调正式面评',conclusion:'建议通过'}},status:400});
- await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:own.revision,completed:true,feedback:{summary:'联调正式面评',conclusion:'建议通过'}}});
+ await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:own.revision,feedback:{summary:'',conclusion:'建议通过'}},status:400});
+ await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:own.revision,feedback:{summary:'联调正式面评',conclusion:'建议通过'}}});
  hrState=await get();let a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'进行中');assert.equal(a.rounds[0].feedback.summary,'联调正式面评');
  assert.equal(a.rounds[0].feedback.transcript.id,transcript.id);assert.equal((await fetch(origin+'/api/transcripts/'+transcript.id,{headers:{Cookie:hr},redirect:'manual'})).status,302);
  a.rounds[0].feedback={...a.rounds[0].feedback,status:'returned',returnReason:'联调退回'};await api('/state',{method:'POST',cookie:hr,body:hrState});
- hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);const beforeFailure=(await api('/state',{cookie:interviewer})).value.data;await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:beforeFailure.revision,completed:true,feedback:{summary:'本轮不通过',conclusion:'建议不通过'}}});hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'未录用');assert.match(a.reason,/初试不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(hrState.applications.find(a=>a.id===ids.closedApp).status,'未录用');
+ hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.rounds[0].feedbackVersions.length,1);const beforeFailure=(await api('/state',{cookie:interviewer})).value.data;await api(feedbackPath,{method:'PATCH',cookie:interviewer,body:{revision:beforeFailure.revision,feedback:{summary:'本轮不通过',conclusion:'建议不通过'}}});hrState=await get();a=hrState.applications.find(a=>a.id===ids.app);assert.equal(a.status,'未录用');assert.match(a.reason,/初试不通过/);assert.equal(a.rounds[1].cancelled,true);assert.equal(hrState.applications.find(a=>a.id===ids.closedApp).status,'未录用');
  const resetPassword=randomBytes(24).toString('hex');
  await api('/users/'+ids.other+'/password',{method:'POST',cookie:hr,body:{password:resetPassword},status:403});
  await api('/users/'+ids.other+'/password',{method:'POST',cookie:interviewer,body:{password:resetPassword},status:403});

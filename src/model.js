@@ -59,10 +59,10 @@ export function validateSchedule(app,r,data,people=null){
  if(data.mode==='线上'){let url;try{url=new URL(data.location);}catch{throw Error('请填写完整有效的会议链接');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('会议链接须为不含账号密码的 HTTP/HTTPS 地址');}
  if(r.interviewer&&r.interviewer!==data.interviewer&&r.feedback.status!=='none') throw Error('已有面评草稿，请先保留原安排并增加一轮');
 }
-export function submitFeedback(app,r,person,data,completed){
+export function submitFeedback(app,r,person,data){
  if(r.cancelled||!r.time||r.interviewer!==person) throw Error('仅本轮面试官可以提交有效安排的面评');
  if(r.feedback.status==='submitted') throw Error('面评已锁定，需 HR 退回后修改');
- if(!completed||!data.summary.trim()||!['建议通过','建议不通过','建议加面','待定'].includes(data.conclusion)) throw Error('请填写综合评价、建议结论，并确认面试已完成');
+ if(!data.summary.trim()||!['建议通过','建议不通过','建议加面','待定'].includes(data.conclusion)) throw Error('请填写综合评价和建议结论');
  return {...data,status:'submitted',submittedAt:new Date().toISOString(),author:person,returnReason:r.feedback.returnReason||''};
 }
 export function validateHREndApplication(app,status){

@@ -1,3 +1,4 @@
+import {hasInterviewArrangement,isSpecialInterview} from '../src/interview-arrangement.js';
 import {pendingHRDecision,reviewSourceValid} from '../src/round-review.js';
 import {applicationStage} from '../src/model.js';
 import {canManageAccounts} from '../src/permissions.js';
@@ -24,6 +25,7 @@ function currentPhase(app,created,now){
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0){const times=app.rounds.map(r=>recruitmentTime(r.feedback.submittedAt)).filter(v=>v!==null);return {key:'decision',round:'所有轮次面评已交',since:times.length?Math.max(...times):null,clock:'距最后面评提交'};}
  const round=app.rounds[index],time=recruitmentTime(round.time);
+ if(isSpecialInterview(round)&&!round.cancelled)return {key:'feedback',round:round.name+' · 特殊',since:round.specialRecordedAt,clock:'距特殊面试补录'};
  if(!round.time&&round.review?.status==='needs_info'&&reviewSourceValid(app,round))return {key:'decision',round:round.name+' · 需 HR 补充',since:round.review.reviewedAt,clock:'距提出补充要求'};
  if(!round.time&&round.review?.status==='pending'&&reviewSourceValid(app,round))return {key:round.review.interviewer?'review':'schedule',round:round.name+(round.review.interviewer?'简历审核':'待指定审核面试官'),since:round.review.sentAt,clock:'距发起本轮审核'};
  if(round.cancelled||time===null){const cancellation=[...(round.scheduleEvents||[])].reverse().find(e=>e.type==='cancelled');return {key:'schedule',round:round.name,since:cancellation?.at||(index?app.rounds[index-1].feedback.submittedAt:screening?.reviewedAt||created),clock:'距进入待安排'};}
@@ -74,8 +76,8 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
  }
  const roundResults=new Map();let accepted=0,declined=0,pendingReview=0,skipped=0,scheduled=0,hired=0,cohortOngoing=0;
  for(const {app} of cohort){
-  if(app.screening?.status==='accepted')accepted++;else if(app.screening?.status==='declined')declined++;else if(app.screening?.status==='skipped'||!app.screening&&app.rounds.some(r=>r.time))skipped++;else pendingReview++;
-  if(app.rounds.some(r=>r.time))scheduled++;if(app.status==='公司决定录用')hired++;if(app.status==='进行中')cohortOngoing++;
+  if(app.screening?.status==='accepted')accepted++;else if(app.screening?.status==='declined')declined++;else if(app.screening?.status==='skipped'||!app.screening&&app.rounds.some(r=>hasInterviewArrangement(r)))skipped++;else pendingReview++;
+  if(app.rounds.some(r=>hasInterviewArrangement(r)))scheduled++;if(app.status==='公司决定录用')hired++;if(app.status==='进行中')cohortOngoing++;
   app.rounds.forEach((r,index)=>{if(r.feedback.status!=='submitted')return;const key=`${index}:${r.name}`;if(!roundResults.has(key))roundResults.set(key,{key,index:index+1,name:r.name,passed:0,failed:0,additional:0,undecided:0,unknown:0});const row=roundResults.get(key);row[{'建议通过':'passed','建议不通过':'failed','建议加面':'additional','待定':'undecided'}[r.feedback.conclusion]||'unknown']++;});
  }
  queue.sort((a,b)=>Number(a.phase==='interview')-Number(b.phase==='interview')||(b.waitHours??-1)-(a.waitHours??-1));
@@ -93,11 +95,11 @@ export function recruitmentAnalysis(records,candidates,people){
   const events=(app.history||[]).map(h=>({at:h.at,text:h.action,actor:h.actor}));
   const times=[created,app.endedAt,app.screening?.reviewedAt,...events.map(e=>e.at),...submitted.map(r=>r.feedback.submittedAt)].map(recruitmentTime).filter(t=>t!==null);
   return {id:app.id,name:candidates.get(app.candidateId)?.name||'候选人已缺失',job:app.job,ownerId:owner.id,status:app.status,stage:stage.name,tone:stage.tone,created,lastAt:times.length?new Date(Math.max(...times)).toISOString():null,
-   reached:{created:true,scheduled:app.rounds.some(r=>r.time||r.scheduleEvents?.some(e=>e.type==='created')),submitted:submitted.length>0,passed:submitted.some(r=>r.feedback.conclusion==='建议通过'),hired:app.status==='公司决定录用'},
+   reached:{created:true,scheduled:app.rounds.some(r=>hasInterviewArrangement(r)||r.scheduleEvents?.some(e=>e.type==='created')),submitted:submitted.length>0,passed:submitted.some(r=>r.feedback.conclusion==='建议通过'),hired:app.status==='公司决定录用'},
    passed:submitted.filter(r=>r.feedback.conclusion==='建议通过').length,failed:submitted.filter(r=>r.feedback.conclusion==='建议不通过').length,
    cycleHours:app.status==='进行中'||recruitmentTime(app.endedAt)===null||recruitmentTime(created)===null||recruitmentTime(app.endedAt)<recruitmentTime(created)?null:(recruitmentTime(app.endedAt)-recruitmentTime(created))/3600000,
    events,screening:app.screening?{status:app.screening.status,reviewedAt:app.screening.reviewedAt}:null,
-   rounds:app.rounds.map(r=>({name:r.name,time:r.time,cancelled:!!r.cancelled,status:r.feedback.status,conclusion:r.feedback.status==='submitted'?r.feedback.conclusion:null,submittedAt:r.feedback.status==='submitted'?r.feedback.submittedAt:null}))};
+   rounds:app.rounds.map(r=>({name:r.name,time:r.time,mode:r.mode,specialRecordedAt:r.specialRecordedAt,cancelled:!!r.cancelled,status:r.feedback.status,conclusion:r.feedback.status==='submitted'?r.feedback.conclusion:null,submittedAt:r.feedback.status==='submitted'?r.feedback.submittedAt:null}))};
  });
  function summary(list){const cycles=list.map(r=>r.cycleHours).filter(n=>n!==null),passed=list.reduce((n,r)=>n+r.passed,0),failed=list.reduce((n,r)=>n+r.failed,0);return {created:list.length,jobs:new Set(list.map(r=>r.job)).size,ongoing:list.filter(r=>r.status==='进行中').length,hired:list.filter(r=>r.reached.hired).length,terminated:list.filter(r=>!['进行中','公司决定录用'].includes(r.status)).length,exited:list.filter(r=>r.status==='候选人退出').length,submitted:list.filter(r=>r.reached.submitted).length,passed,failed,passRate:passed+failed?passed/(passed+failed):null,cycleHours:cycles.length?cycles.reduce((a,b)=>a+b,0)/cycles.length:null,cycleSamples:cycles.length};}
  return {summary:summary(rows),people:people.map(p=>({id:p.id,name:p.name,role:p.role,frozen:!!p.frozen,...summary(rows.filter(r=>r.ownerId===p.id))})),jobs:[...new Set(rows.map(r=>r.job))].map(job=>({job,...summary(rows.filter(r=>r.job===job))})),funnel:stages.map(([key,name],i)=>{const members=rows.filter(r=>r.reached[key]),previous=i?rows.filter(r=>r.reached[stages[i-1][0]]):[];return {key,name,count:members.length,conversion:i&&previous.length&&members.every(r=>r.reached[stages[i-1][0]])?members.length/previous.length:null};}),records:rows};

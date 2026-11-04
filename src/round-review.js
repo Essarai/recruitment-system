@@ -1,3 +1,4 @@
+import {hasInterviewArrangement} from './interview-arrangement.js';
 // Later-round review is separate from initial resume screening and interview feedback.
 function progressionValid(source,target){
  const decision=source.hrProgression;
@@ -9,7 +10,7 @@ export function pendingHRDecision(app){
  const source=app.rounds[index],next=app.rounds[index+1];
  if(!source||source.cancelled||source.feedback.status!=='submitted'||!['待定','建议加面'].includes(source.feedback.conclusion))return null;
  // Historical rounds already scheduled must remain usable without a retroactive decision.
- if(next&&(next.time||next.cancelled||next.feedback.status!=='none'||progressionValid(source,next)))return null;
+ if(next&&(hasInterviewArrangement(next)||next.cancelled||next.feedback.status!=='none'||progressionValid(source,next)))return null;
  return {source,next};
 }
 export function activateRoundReviews(app,sentBy='',now=new Date().toISOString()){
@@ -17,7 +18,7 @@ export function activateRoundReviews(app,sentBy='',now=new Date().toISOString())
  let changed=false;
  for(let i=1;i<app.rounds.length;i++){
   const previous=app.rounds[i-1],next=app.rounds[i];
-  if(previous.feedback.status!=='submitted'||(previous.feedback.conclusion!=='建议通过'&&!progressionValid(previous,next))||next.time||next.cancelled||next.feedback.status!=='none')continue;
+  if(previous.feedback.status!=='submitted'||(previous.feedback.conclusion!=='建议通过'&&!progressionValid(previous,next))||hasInterviewArrangement(next)||next.cancelled||next.feedback.status!=='none')continue;
   const progressionId=previous.feedback.conclusion==='建议通过'?undefined:previous.hrProgression.id;
   if(next.review?.sourceRoundId===previous.id&&next.review.sourceSubmittedAt===(previous.feedback.submittedAt||'')&&next.review.sourceProgressionId===progressionId)continue;
   const supplements=next.review?.supplements?.map(item=>item.response||item.supersededAt?item:{...item,supersededAt:now});

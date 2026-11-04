@@ -1,3 +1,4 @@
+import {hasInterviewArrangement} from '../src/interview-arrangement.js';
 import {saveInterviewFeedback} from './feedback.js';
 import {uploadInterviewTranscript} from './transcript-upload.js';
 import {MAX_FILE} from './files.js';
@@ -33,7 +34,7 @@ export function createAdminMcp({user,loadState,fileAccess}){
  });
  const slice=(items,{offset,limit})=>({total:items.length,offset,limit,items:items.slice(offset,offset+limit)});
  register('list_candidates','分页检索候选人档案，支持姓名、联系方式、公司、职位和 HR 沟通备注关键词。',page,async(args,view)=>slice(view.candidates.filter(c=>[c.name,c.phone,c.email,c.company,c.currentTitle,c.notes].join(' ').toLowerCase().includes(args.search.toLowerCase())),args));
- register('list_applications','分页查询团队应聘进度，按候选人姓名、岗位或结果关键词检索。',page,async(args,view)=>slice(view.applications.map(a=>({applicationId:a.id,candidateId:a.candidateId,candidateName:view.candidates.find(c=>c.id===a.candidateId)?.name,job:a.job,status:a.status,createdBy:a.createdBy,rounds:a.rounds.map(r=>({id:r.id,name:r.name,interviewer:r.interviewer,time:r.time,cancelled:r.cancelled,feedbackStatus:r.feedback.status}))})).filter(a=>[a.candidateName,a.job,a.status].join(' ').toLowerCase().includes(args.search.toLowerCase())),args));
+ register('list_applications','分页查询团队应聘进度，按候选人姓名、岗位或结果关键词检索。',page,async(args,view)=>slice(view.applications.map(a=>({applicationId:a.id,candidateId:a.candidateId,candidateName:view.candidates.find(c=>c.id===a.candidateId)?.name,job:a.job,status:a.status,createdBy:a.createdBy,rounds:a.rounds.map(r=>({id:r.id,name:r.name,interviewer:r.interviewer,time:r.time,mode:r.mode,specialRecordedAt:r.specialRecordedAt,cancelled:r.cancelled,feedbackStatus:r.feedback.status}))})).filter(a=>[a.candidateName,a.job,a.status].join(' ').toLowerCase().includes(args.search.toLowerCase())),args));
  register('get_application','读取应聘详情、候选人沟通记录、JD、安排和已提交面评；不含私人草稿。',{applicationId:id},async({applicationId},view)=>{const application=view.applications.find(a=>a.id===applicationId);if(!application)throw Error('应聘不存在');return {revision:view.revision,candidate:view.candidates.find(c=>c.id===application.candidateId),application};});
  register('get_recruitment_file','获取档案简历、应聘简历或已提交面评对话的 5 分钟临时链接。',{applicationId:id.optional(),candidateId:id.optional(),fileId:id.optional(),roundId:id.optional(),kind:z.enum(['resume','transcript'])},async(args,view)=>{
   let file;if(args.applicationId){const a=view.applications.find(a=>a.id===args.applicationId);if(!a)throw Error('应聘不存在');file=args.kind==='resume'?a.resume:a.rounds.find(r=>r.id===args.roundId&&r.feedback.status==='submitted')?.feedback.transcript;}
@@ -55,7 +56,7 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
   const items=view.applications.flatMap(app=>{
    const candidate=view.candidates.find(c=>c.id===app.candidateId);
    const common={applicationId:app.id,candidateName:candidate?.name,job:app.job,applicationStatus:app.status};
-   return [...(app.screening?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,cancelled:r.cancelled,feedbackStatus:r.feedback.status,feedbackStatusLabel:r.feedback.statusLabel,hasTranscript:!!r.feedback.transcript}))];
+   return [...(app.screening?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,mode:r.mode,specialRecordedAt:r.specialRecordedAt,cancelled:r.cancelled,feedbackStatus:r.feedback.status,feedbackStatusLabel:r.feedback.statusLabel,hasTranscript:!!r.feedback.transcript}))];
   });return {total:items.length,offset,limit,items:items.slice(offset,offset+limit)};
  });
  tool('get_my_interview','按应聘 ID 获取候选人资料、本人面试安排和本人面评（含草稿及对话附件信息）。不返回 HR 备注和其他面试官面评。',{applicationId:schemaId},async({applicationId},view)=>{
@@ -69,7 +70,7 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
    try{
     if(args.confirmed!==true)throw Error('请先向用户展示目标候选人、轮次、完整字段或文件，并获得本次确认');
     const view=myInterviews(await loadState(),user),app=view.applications.find(a=>a.id===args.applicationId),round=app?.rounds.find(r=>r.id===args.roundId);
-    if(!round||round.interviewer!==user.name||!round.time||round.cancelled||round.feedback.status==='submitted')throw Error('仅可填写本人未锁定的有效面试');
+    if(!round||round.interviewer!==user.name||!hasInterviewArrangement(round)||round.cancelled||round.feedback.status==='submitted')throw Error('仅可填写本人未锁定的有效面试');
     return {content:[{type:'text',text:JSON.stringify(await handler(args))}]};
    }catch(error){return {isError:true,content:[{type:'text',text:error.code||error.$metadata?'数据库或文件存储暂时不可用，请稍后重试':error.message}]};}
   });

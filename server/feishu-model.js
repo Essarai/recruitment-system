@@ -13,7 +13,7 @@ export function feishuDesired(state,users,config,now=Date.now()){
   }
   for(const r of a.rounds){
    if(a.status==='进行中'&&!r.cancelled&&r.review?.status==='pending'&&reviewSourceValid(a,r)&&eligible(r.review.sentAt)){const who=person(r.review.interviewer);items.push({id:`round-review:${a.id}:${r.id}`,kind:'review',appId:a.id,roundId:r.id,reviewRoundName:r.name,active:true,userId:who?.userId||'',openId:who?.openId||'',name,job:a.job,title:`待审核简历｜${name}｜${a.job}｜${r.name}`,screeningAt:r.review.sentAt,calendarId:config.calendarId});}
-   if(r.calendarSource==='external'||!r.time||r.feedback.status==='submitted')continue;
+   if(r.mode==='特殊'||r.calendarSource==='external'||!r.time||r.feedback.status==='submitted')continue;
    const last=r.scheduleEvents?.at(-1)?.at||a.history?.find(h=>h.action?.startsWith('创建应聘'))?.at;
    if(!eligible(last))continue;
    const start=appointmentTime(r.time),end=start+(r.duration||60)*60000;
@@ -28,7 +28,7 @@ export function feishuDesired(state,users,config,now=Date.now()){
 export function reconcileFeishuJobs(state,existing,wanted,now=Date.now()){
  const map=new Map(wanted.map(t=>[t.id,t]));
  for(const old of existing)if(!map.has(old.id)){
-  const a=state.applications.find(a=>a.id===old.application_id),round=a?.rounds.find(r=>r.id===old.round_id),external=old.kind==='round'&&round?.calendarSource==='external';
+  const a=state.applications.find(a=>a.id===old.application_id),round=a?.rounds.find(r=>r.id===old.round_id),external=old.kind==='round'&&(round?.calendarSource==='external'||round?.mode==='特殊');
   // An explicit source switch retires only the event previously created by this system.
   if(!external&&old.kind==='round'&&(round?.feedback.status==='submitted'||old.desired.end<now&&a?.status==='进行中'&&!round?.cancelled))continue;
   map.set(old.id,{...old.desired,active:false,...(external?{calendarSource:'external'}:{})});

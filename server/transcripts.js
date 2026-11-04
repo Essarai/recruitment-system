@@ -1,3 +1,4 @@
+import {hasInterviewArrangement} from '../src/interview-arrangement.js';
 import {isRecruiter} from '../src/permissions.js';
 import {validateResume,MAX_FILE} from './files.js';
 
@@ -10,13 +11,13 @@ export function validateTranscript(name,buffer){
  return {extension:name.toLowerCase().split('.').pop(),type:/\.md$/i.test(name)?'text/markdown; charset=utf-8':'text/plain; charset=utf-8'};
 }
 export function canUploadTranscript(app,round,user){
- return !!round&&user.role==='interviewer'&&round.interviewer===user.name&&!!round.time&&!round.cancelled&&round.feedback.status!=='submitted';
+ return !!round&&user.role==='interviewer'&&round.interviewer===user.name&&hasInterviewArrangement(round)&&!round.cancelled&&round.feedback.status!=='submitted';
 }
 export function canReadTranscript(state,fileId,user){
  return state.applications.some(app=>app.rounds.some(round=>{
   const published=[...(round.feedback.status==='submitted'?[round.feedback]:[]),...(round.feedbackVersions||[])];
   if(isRecruiter(user))return published.some(f=>f.transcript?.id===fileId);
-  return user.role==='interviewer'&&round.interviewer===user.name&&!!round.time&&[round.feedback,...published].some(f=>f.transcript?.id===fileId);
+  return user.role==='interviewer'&&round.interviewer===user.name&&hasInterviewArrangement(round)&&[round.feedback,...published].some(f=>f.transcript?.id===fileId);
  }));
 }
 export async function transcriptReference(db,input,previous,appId,roundId,user){

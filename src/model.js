@@ -1,3 +1,4 @@
+import {hasInterviewArrangement,isSpecialInterview} from './interview-arrangement.js';
 import {appointmentTime} from './availability.js';
 import {pendingHRDecision,reviewSourceValid} from './round-review.js';
 import {resumeReviewDecision} from './resume-review.js';
@@ -47,27 +48,28 @@ export function templateNodes(nodes,people=null){
  return normalized;
 }
 export const roundsFromTemplate = template => templateNodes(template.nodes).map(round);
-export const pending = app => app.rounds.filter(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted').length;
-export const nextInterview = app => app.status!=='进行中'?null:app.rounds.filter(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted'&&new Date(r.time)>new Date()).sort((a,b)=>a.time.localeCompare(b.time))[0];
+export const pending = app => app.rounds.filter(r=>hasInterviewArrangement(r)&&!r.cancelled&&r.feedback.status!=='submitted').length;
+export const nextInterview = app => app.status!=='进行中'?null:app.rounds.filter(r=>hasInterviewArrangement(r)&&!r.cancelled&&r.feedback.status!=='submitted'&&new Date(r.time)>new Date()).sort((a,b)=>a.time.localeCompare(b.time))[0];
 export function validateSchedule(app,r,data,people=null){
  if(data.calendarSource!==undefined&&(typeof data.calendarSource!=='string'||!Object.hasOwn(calendarSources,data.calendarSource)))throw Error('请选择有效的日程来源');
  validateResumeConfirmation(app);
  if(app.status!=='进行中') throw Error('应聘已结束，不能新增或修改安排');
- if(app.rounds.findIndex(x=>x.id===r.id)>0&&(!r.time||r.review)){if(r.review?.status!=='accepted'||!reviewSourceValid(app,r))throw Error('请先完成本轮简历审核，再安排面试');if(data.interviewer!==r.review.interviewer)throw Error('更换面试官后须重新审核简历');}
+ if(app.rounds.findIndex(x=>x.id===r.id)>0&&(!hasInterviewArrangement(r)||r.review)){if(r.review?.status!=='accepted'||!reviewSourceValid(app,r))throw Error('请先完成本轮简历审核，再安排面试');if(data.interviewer!==r.review.interviewer)throw Error('更换面试官后须重新审核简历');}
  if(r.feedback.status==='submitted') throw Error('已有正式面评的安排不可修改，请增加一轮面试');
+ if(r.interviewer&&r.interviewer!==data.interviewer&&r.feedback.status!=='none') throw Error('已有面评草稿，请先保留原安排并增加一轮');
+ if(data.mode==='特殊'){if(!data.interviewer||(people&&!people.includes(data.interviewer))||data.time||data.location)throw Error('特殊面试须指定面试官，不填写时间和地点');return;}
  if(!data.interviewer||(people&&!people.includes(data.interviewer))||!data.time||!Number.isFinite(new Date(data.time).getTime())||!data.location.trim()) throw Error('请填写面试官、有效时间及地点或会议链接');
  if(data.mode==='线上'){let url;try{url=new URL(data.location);}catch{throw Error('请填写完整有效的会议链接');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('会议链接须为不含账号密码的 HTTP/HTTPS 地址');}
- if(r.interviewer&&r.interviewer!==data.interviewer&&r.feedback.status!=='none') throw Error('已有面评草稿，请先保留原安排并增加一轮');
 }
 export function submitFeedback(app,r,person,data){
- if(r.cancelled||!r.time||r.interviewer!==person) throw Error('仅本轮面试官可以提交有效安排的面评');
+ if(r.cancelled||!hasInterviewArrangement(r)||r.interviewer!==person) throw Error('仅本轮面试官可以提交有效安排的面评');
  if(r.feedback.status==='submitted') throw Error('面评已锁定，需 HR 退回后修改');
  if(!data.summary.trim()||!['建议通过','建议不通过','建议加面','待定'].includes(data.conclusion)) throw Error('请填写综合评价和建议结论');
  return {...data,status:'submitted',submittedAt:new Date().toISOString(),author:person,returnReason:r.feedback.returnReason||''};
 }
 export function validateHREndApplication(app,status){
  if(status==='候选人退出')return;
- const outstanding=app.rounds.filter(r=>r.time&&!r.cancelled&&r.feedback.status!=='submitted');
+ const outstanding=app.rounds.filter(r=>hasInterviewArrangement(r)&&!r.cancelled&&r.feedback.status!=='submitted');
  if(outstanding.length)throw Error(`仍有 ${outstanding.length} 份面评未正式提交（${outstanding.map(r=>r.name).join('、')}），请先完成面评后再结束流程`);
 }
 export function endApplication(app,status,reason,now=new Date().toISOString()){
@@ -79,14 +81,14 @@ export function endApplication(app,status,reason,now=new Date().toISOString()){
 export function applicationStage(app,now=Date.now()){
  if(!app)return {name:'未创建应聘',detail:'可创建新的应聘记录',tone:'neutral'};
  if(app.status!=='进行中')return {name:applicationResultLabel(app),detail:app.reason||'应聘已结束',tone:app.withdrawnAt?'neutral':app.status==='公司决定录用'?'success':app.status==='未录用'?'danger':'neutral'};
- if(needsScreening(app)&&!app.rounds[0]?.time){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='needs_info'?'需 HR 补充':s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='needs_info'?s.reason:s?.status==='accepted'?'简历确认已通过，可安排面试':s?.status==='pending'?`${s.interviewer} · 等待确认`:s?.status==='declined'?s.reason:'先指定简历确认人'};}
+ if(needsScreening(app)&&!hasInterviewArrangement(app.rounds[0])){const s=app.screening;return {tone:s?.status==='declined'?'danger':'pending',name:s?.status==='needs_info'?'需 HR 补充':s?.status==='pending'?'简历待确认':s?.status==='declined'?'简历已退回':s?.status==='accepted'?'首轮待安排':'待推送简历',detail:s?.status==='needs_info'?s.reason:s?.status==='accepted'?'简历确认已通过，可安排面试':s?.status==='pending'?`${s.interviewer} · 等待确认`:s?.status==='declined'?s.reason:'先指定简历确认人'};}
  const decision=pendingHRDecision(app);
  if(decision)return {name:`${decision.source.name} · ${decision.source.feedback.conclusion==='待定'?'结论待定':'建议加面'}`,detail:'本轮面评已提交，等待发起 HR 决定后续安排',tone:'pending',round:decision.source,awaitingHR:true};
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0)return {name:'待 HR 决策',detail:'所有轮次面评已提交',tone:'pending'};
  const round=app.rounds[index];
  if(round.review?.status==='needs_info')return {name:`${round.name} · 需 HR 补充`,detail:round.review.reason,tone:'pending',round};
- const status=round.review?.status==='pending'?`等待 ${round.review.interviewer||'HR 指定面试官'} 审核简历`:round.cancelled?'待重新安排':!round.time?'待安排':round.feedback.status==='returned'?'待提交':new Date(round.time).getTime()<=now?'待提交面评':'待面试';
+ const status=round.review?.status==='pending'?`等待 ${round.review.interviewer||'HR 指定面试官'} 审核简历`:round.cancelled?'待重新安排':!hasInterviewArrangement(round)?'待安排':round.feedback.status==='returned'?'待提交':isSpecialInterview(round)||new Date(round.time).getTime()<=now?'待提交面评':'待面试';
  return {tone:roundTone(round,now),name:round.name,detail:`第 ${index+1} / ${app.rounds.length} 轮 · ${status}`,round};
 }
 
@@ -94,11 +96,12 @@ export function roundTone(round,now=Date.now()){
  if(round.cancelled)return 'neutral';
  if(round.feedback.status==='submitted')return round.feedback.conclusion==='建议不通过'?'danger':['待定','建议加面'].includes(round.feedback.conclusion)?'pending':'success';
  if(round.feedback.status==='returned')return 'feedback';
- if(!round.time)return 'pending';
+ if(!hasInterviewArrangement(round))return 'pending';
+ if(isSpecialInterview(round))return 'feedback';
  return new Date(round.time).getTime()<=now?'feedback':'interview';
 }
 
-export const needsScreening=app=>app.screening?.status!=='skipped'&&(!!app.screening||!app.rounds[0]?.time);
+export const needsScreening=app=>app.screening?.status!=='skipped'&&(!!app.screening||!hasInterviewArrangement(app.rounds[0]));
 export function validateResumeConfirmation(app){
  if(!needsScreening(app))return;
  if(app.screening?.status!=='accepted')throw Error('请先完成独立的简历确认，再安排面试');
@@ -121,10 +124,10 @@ export function mergeResumeFields(current,parsed,edited=new Set(),previous={}){
 
 export function applicationProgress(app,now=Date.now()){
  const stage=applicationStage(app,now),ended=app.status!=='进行中';
- const screened=app.screening?.status==='accepted'||!!app.rounds[0]?.time;
+ const screened=app.screening?.status==='accepted'||!!hasInterviewArrangement(app.rounds[0]);
  return [
   ...(app.screening?.status==='skipped'?[]:[{id:'screening',name:'简历确认',done:screened,active:!ended&&!screened,tone:stage.tone}]),
-  ...app.rounds.map(r=>({id:r.id,name:r.name,done:r.feedback.status==='submitted',active:!ended&&r.feedback.status!=='submitted'&&(stage.round?.id===r.id||!!r.time&&!r.cancelled),tone:roundTone(r,now)})),
+  ...app.rounds.map(r=>({id:r.id,name:r.name,done:r.feedback.status==='submitted',active:!ended&&r.feedback.status!=='submitted'&&(stage.round?.id===r.id||hasInterviewArrangement(r)&&!r.cancelled),tone:roundTone(r,now)})),
   {id:'result',name:'结果',done:ended,active:!ended&&app.rounds.every(r=>r.feedback.status==='submitted'),tone:stage.tone}
  ];
 }
@@ -145,7 +148,7 @@ export function terminateFailedApplication(app,actor='系统',now=new Date().toI
 }
 
 export function stopFutureRounds(app,now=new Date().toISOString()){
- for(const r of app.rounds)if(r.feedback.status!=='submitted'&&(!r.time||appointmentTime(r.time)>new Date(now).getTime()))r.cancelled=true;
+ for(const r of app.rounds)if(r.feedback.status!=='submitted'&&!isSpecialInterview(r)&&(!r.time||appointmentTime(r.time)>new Date(now).getTime()))r.cancelled=true;
 }
 
 export function candidateResumes(candidate,applications){
@@ -165,4 +168,4 @@ export function newestApplications(applications){
   .sort((a,b)=>a.time===b.time?0:b.time-a.time).map(row=>row.app);
 }
 
-export const canDeleteInterviewRound=(app,r)=>app.status==='进行中'&&app.rounds.length>1&&!r.time&&!r.scheduleEvents?.length&&r.feedback.status==='none'&&!r.feedbackVersions?.length&&!r.feedback.transcript&&!r.review;
+export const canDeleteInterviewRound=(app,r)=>app.status==='进行中'&&app.rounds.length>1&&!hasInterviewArrangement(r)&&!r.scheduleEvents?.length&&r.feedback.status==='none'&&!r.feedbackVersions?.length&&!r.feedback.transcript&&!r.review;

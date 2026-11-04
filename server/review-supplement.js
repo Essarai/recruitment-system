@@ -1,3 +1,4 @@
+import {hasInterviewArrangement} from '../src/interview-arrangement.js';
 import {readState,users,visibleState} from './database.js';
 import {canManageApplication} from '../src/permissions.js';
 import {canReviewRound} from '../src/round-review.js';
@@ -7,7 +8,7 @@ import {compactCandidates} from './resume-library.js';
 export function supplementReview(app,round,actor,people,response,now=new Date().toISOString(),reviewer=null){
  if(!app||!canManageApplication(actor,app)||actor.frozen)throw Object.assign(Error('仅发起 HR 或管理员可以补充并重新送审'),{status:403});
  const review=round?round.review:app.screening;
- if(app.status!=='进行中'||app.withdrawnAt||review?.status!=='needs_info'||(round?!canReviewRound(app,round,review.interviewer)||round.time:app.rounds.some(r=>r.time)))throw Object.assign(Error('当前简历已不在待补充状态，请刷新核对'),{status:409});
+ if(app.status!=='进行中'||app.withdrawnAt||review?.status!=='needs_info'||(round?!canReviewRound(app,round,review.interviewer)||hasInterviewArrangement(round):app.rounds.some(r=>hasInterviewArrangement(r))))throw Object.assign(Error('当前简历已不在待补充状态，请刷新核对'),{status:409});
  const recipient=text(reviewer??review.interviewer,'简历确认人',100,true);
  if(!people.some(p=>p.name===recipient&&p.role==='interviewer'&&!p.frozen))throw Error('请选择启用的简历确认人');
  const reply=text(response,'补充说明',2000,true),request=review.supplements?.at(-1);

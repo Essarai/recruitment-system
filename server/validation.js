@@ -1,3 +1,4 @@
+import {hasInterviewArrangement,isSpecialInterview} from '../src/interview-arrangement.js';
 import {activateRoundReviews} from '../src/round-review.js';
 import {applicationCreatorName} from '../src/permissions.js';
 import {canManageApplication} from '../src/permissions.js';
@@ -79,10 +80,12 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(r.calendarSource!==undefined){if(typeof r.calendarSource!=='string'||!Object.hasOwn(calendarSources,r.calendarSource))throw Error('请选择有效的日程来源');if(r.calendarSource!=='system'||!oldRound||oldRound.calendarSource!==undefined)result.calendarSource=r.calendarSource;}else if(oldRound?.calendarSource!==undefined)result.calendarSource=oldRound.calendarSource;
    if(r.duration!==undefined){if(!Number.isInteger(r.duration)||r.duration<15||r.duration>240||r.duration%15)throw Error('面试时长须为 15～240 分钟，且为 15 分钟的倍数');result.duration=r.duration;}else if(oldRound?.duration!==undefined)result.duration=oldRound.duration;
    if(roundIds.has(result.id))throw Error('面试节点 ID 不能重复');roundIds.add(result.id);
-   if(!['线上','线下'].includes(result.mode))throw Error('请选择面试方式');
+   if(!['线上','线下','特殊'].includes(result.mode))throw Error('请选择面试方式');
+   if(r.specialRecordedAt!==undefined&&r.specialRecordedAt!==oldRound?.specialRecordedAt)throw Error('不能伪造特殊面试登记时间');
+   if(oldRound?.specialRecordedAt)result.specialRecordedAt=oldRound.specialRecordedAt;
    if(result.interviewer&&!interviewers.includes(result.interviewer)&&oldRound?.interviewer!==result.interviewer)throw Error('面试官账号不存在');
    if(oldRound&&oldRound.name!==result.name)throw Error('不能改写已有轮次名称');
-   if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.review.status==='needs_info')throw Error('请先补充说明并重新送审，不能绕过待补充要求');if(oldRound.time||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
+   if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.review.status==='needs_info')throw Error('请先补充说明并重新送审，不能绕过待补充要求');if(hasInterviewArrangement(oldRound)||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
    if(r.hrProgression!==undefined&&!equal(r.hrProgression,oldRound?.hrProgression))throw Error('不能伪造或改写 HR 推进决定');
    if(oldRound?.hrProgression)result.hrProgression=structuredClone(oldRound.hrProgression);
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
@@ -91,8 +94,13 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(changed){
     if(result.interviewer&&!activeInterviewers.includes(result.interviewer))throw Error(interviewers.includes(result.interviewer)?'不能为已冻结的面试官新增或修改安排':'该账号已不再是面试官，请重新指定面试官');
     if(old?.status!=='进行中'&&old)throw Error('应聘已结束，不能变更安排');
-    if(result.time){if(index>0&&!oldRound)throw Error('新增轮次须先完成本轮简历审核，再安排面试');validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
-    else if(oldRound?.time||result.location||result.focus)throw Error('请完整填写面试安排');
+    if((result.mode==='特殊'||isSpecialInterview(oldRound))&&actorUser?.role!=='admin')throw Error('仅管理员可以登记或修改特殊面试');
+    if(result.mode==='特殊'){
+     if(result.time||result.location)throw Error('特殊面试不填写时间和地点');
+     result.specialRecordedAt=oldRound?.specialRecordedAt||now;
+    }else if(oldRound?.specialRecordedAt){delete result.specialRecordedAt;}
+    if(hasInterviewArrangement(result)){if(index>0&&!oldRound)throw Error('新增轮次须先完成本轮简历审核，再安排面试');validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
+    else if(hasInterviewArrangement(oldRound)||result.location||result.focus)throw Error('请完整填写面试安排');
    }
    if(old&&old.status!=='进行中'&&oldRound?.cancelled!==result.cancelled)throw Error('应聘已结束，不能变更安排');
    if(result.cancelled&&!oldRound)throw Error('新节点不能直接取消');
@@ -105,7 +113,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
     result.feedback={...oldRound.feedback,status:'returned',returnReason:reason};
    }else if(oldRound?.feedback.status==='submitted'&&!equal(r.feedback,oldRound.feedback))throw Error('不能改写面试官的正式面评');
    if(actorUser){
-    const type=result.cancelled&&!oldRound?.cancelled&&next.status==='进行中'?'cancelled':!result.cancelled&&result.time&&(!oldRound?.time||oldRound.cancelled)?'created':!result.cancelled&&result.time&&['interviewer','time','mode','location','duration'].some(key=>oldRound?.[key]!==result[key])?'rescheduled':oldRound?.calendarSource!==result.calendarSource?'calendarSourceChanged':null;
+    const type=result.cancelled&&!oldRound?.cancelled&&next.status==='进行中'?'cancelled':!result.cancelled&&hasInterviewArrangement(result)&&(!hasInterviewArrangement(oldRound)||oldRound.cancelled)?'created':!result.cancelled&&hasInterviewArrangement(result)&&['interviewer','time','mode','location','duration'].some(key=>oldRound?.[key]!==result[key])?'rescheduled':oldRound?.calendarSource!==result.calendarSource?'calendarSourceChanged':null;
     if(type)result.scheduleEvents=[...(result.scheduleEvents||[]),{type,at:now,actorId:actorUser.id,actorName:actorUser.name}];
    }
    return result;

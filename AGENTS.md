@@ -237,3 +237,5 @@ Expanded status menu corrected 2026-11-06: anchor the popup to its trigger with 
 Application status options clarified 2026-11-06: remove the aggregate 全部进行中 option; retain 全部状态, six distinct recruitment phases and ended results. Default to 全部状态 under existing ownership selection and migrate remembered aggregate ongoing selection to all status. Internal ongoing status remains for phase filtering, not as a visible selectable option.
 
 Migration notice confirmed 2026-11-06: show a permanent non-dismissible announcement on login and all authenticated pages linking https://recruitments.wanghuock.com/ and stating account/password unchanged. Keep the banner visible while scrolling and reserve space so sidebar and content are not covered.
+
+Status dropdown hierarchy clarified 2026-11-06: all filter options are a single flat list; remove recruitment/ended headings and grouping separators.

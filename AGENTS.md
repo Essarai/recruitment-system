@@ -235,3 +235,5 @@ Application status dropdown refined 2026-11-06: keep one compact 40px status tri
 Expanded status menu corrected 2026-11-06: anchor the popup to its trigger with matching width, rather than viewport fixed offsets that shift it away from the control. Choose below/above according to available viewport/dialog space, cap height and scroll internally. Use compact aligned rows, explicit dot colors and SVG chevron; focusing the selected option must not scroll the page.
 
 Application status options clarified 2026-11-06: remove the aggregate 全部进行中 option; retain 全部状态, six distinct recruitment phases and ended results. Default to 全部状态 under existing ownership selection and migrate remembered aggregate ongoing selection to all status. Internal ongoing status remains for phase filtering, not as a visible selectable option.
+
+Migration notice confirmed 2026-11-06: show a permanent non-dismissible announcement on login and all authenticated pages linking https://recruitments.wanghuock.com/ and stating account/password unchanged. Keep the banner visible while scrolling and reserve space so sidebar and content are not covered.

@@ -99,3 +99,14 @@ test('管理员 Token 强制只读，普通 HR 不能创建，面试官可选择
   assert.equal(value.canWrite,expected);assert.equal(stored.at(-1),expected);
  }
 });
+
+test('后续面试官可读同次应聘前序已提交面评，隔离草稿、后序和其他应聘',()=>{
+ const s=fixture(),a=s.applications[0],own=a.rounds[1],person={...user,name:own.interviewer};
+ a.rounds[0].feedback={status:'submitted',summary:'前轮正式评价',conclusion:'建议通过',transcript:{id:'private-attachment'}};
+ const view=visibleState(s,person,[],1),app=view.applications.find(x=>x.id===a.id);
+ assert.equal(app.previousFeedback[0].summary,'前轮正式评价');assert.equal(app.previousFeedback[0].transcript,undefined);
+ assert.equal(myInterviews(s,person).applications.find(x=>x.id===a.id).previousFeedback[0].summary,'前轮正式评价');
+ a.rounds[0].feedback.status='draft';assert.equal(visibleState(s,person,[],1).applications.find(x=>x.id===a.id).previousFeedback.length,0);
+ a.rounds[0].feedback.status='submitted';assert.equal(visibleState(s,user,[],1).applications.find(x=>x.id===a.id).previousFeedback.length,0);
+ assert.equal(visibleState(s,{...user,name:'不相关'},[],1).applications.length,0);
+});

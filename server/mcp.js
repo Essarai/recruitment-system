@@ -59,7 +59,7 @@ export function createInterviewMcp({user,loadState,fileAccess,saveDraft,uploadTr
    return [...(app.screening?[{...common,kind:'resume_review',screening:app.screening}]:[]),...app.rounds.map(r=>({...common,kind:'interview',roundId:r.id,round:r.name,time:r.time,mode:r.mode,specialRecordedAt:r.specialRecordedAt,cancelled:r.cancelled,feedbackStatus:r.feedback.status,feedbackStatusLabel:r.feedback.statusLabel,hasTranscript:!!r.feedback.transcript}))];
   });return {total:items.length,offset,limit,items:items.slice(offset,offset+limit)};
  });
- tool('get_my_interview','按应聘 ID 获取候选人资料、本人面试安排和本人面评（含草稿及对话附件信息）。不返回 HR 备注和其他面试官面评。',{applicationId:schemaId},async({applicationId},view)=>{
+ tool('get_my_interview','按应聘 ID 获取候选人资料、本人面试安排和本人面评（含草稿及对话附件信息）。包含同次应聘前序轮次已提交面评 previousFeedback；不返回 HR 备注或他人草稿。',{applicationId:schemaId},async({applicationId},view)=>{
   const app=view.applications.find(a=>a.id===applicationId);if(!app)throw Error('应聘不存在或无权访问');return {revision:view.revision,candidate:view.candidates.find(c=>c.id===app.candidateId),application:app};
  });
  tool('get_interview_file','获取本人有权读取的简历或本人当前面评对话附件的 5 分钟临时 URL。对话文件必须指定本人 roundId。',{

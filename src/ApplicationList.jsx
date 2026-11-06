@@ -12,8 +12,9 @@ import {PaginatedList} from './PaginatedList';
 import React,{useEffect,useRef,useState} from 'react';
 import {newestApplications,applicationStage,applicationProgress,educationOptions,nextInterview,applicationStatus,applicationResultLabel} from './model';
 export function ApplicationList({data,user,query,open,select,date,withdraw,busy,onQueryChange}){
- const [job,setJob]=useViewState('applications:job',''),[status,setStatus]=useViewState('applications:status','进行中'),[person,setPerson]=useViewState('applications:person',''),[scope,setScope]=useViewState('applications:scope','mine');
+ const [job,setJob]=useViewState('applications:job',''),[status,setStatus]=useViewState('applications:status',''),[person,setPerson]=useViewState('applications:person',''),[scope,setScope]=useViewState('applications:scope','mine');
  const [phase,setPhase]=useViewState('applications:phase','');
+ useEffect(()=>{if(status==='进行中'&&!phase)setStatus('');},[status,phase]);
  const [now,setNow]=useState(Date.now);useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[]);
  const candidateMap=new Map(data.candidates.map(c=>[c.id,c]));
  const candidate=a=>candidateMap.get(a.candidateId);

@@ -231,3 +231,5 @@ Application filtering clarified 2026-11-06: retain default 我发起的 / 进行
 Application filter UI clarified 2026-11-06: combine overall status and ongoing phase into one 应聘状态 select with grouped ongoing options (全部进行中 and its six phases) and ended results. Do not show a separate phase select. Preserve existing remembered status/phase semantics and shared mobile/desktop filtering.
 
 Application status dropdown refined 2026-11-06: keep one compact 40px status trigger and a consistent grouped 232px menu with 36px option rows, status dots, blue selected check, subtle separators and 14/12px shared type scale. Support arrow/Home/End navigation, Escape, outside dismissal and viewport positioning; keep existing filter semantics and mobile sheet support.
+
+Expanded status menu corrected 2026-11-06: anchor the popup to its trigger with matching width, rather than viewport fixed offsets that shift it away from the control. Choose below/above according to available viewport/dialog space, cap height and scroll internally. Use compact aligned rows, explicit dot colors and SVG chevron; focusing the selected option must not scroll the page.

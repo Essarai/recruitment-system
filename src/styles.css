@@ -259,15 +259,23 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 .interview-filter-panel{margin:0 0 20px}.interview-filters{margin:0 0 8px}.interview-filter-summary{margin:0;font-size:var(--text-caption)}@media(max-width:650px){.interview-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.interview-filters select{width:100%}.interview-filters .text-button{justify-self:start}}
 
 /* Application status: one compact control with a consistent grouped menu. */
-.application-status-filter{position:relative;width:176px;flex-shrink:0}
+.application-status-filter{position:relative;width:184px;flex-shrink:0}
 .application-status-trigger{display:flex;align-items:center;gap:9px;width:100%;height:40px;padding:0 14px;border:1px solid #dadce0;border-radius:8px;text-align:left;font-size:14px;font-weight:400;background:#fff}
 .application-status-trigger[aria-expanded="true"]{border-color:#1a73e8;box-shadow:0 0 0 2px #e8f0fe}
 .status-chevron{margin-left:auto;color:#70757a;font-size:18px;line-height:1}
 .status-dot{display:block;width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:currentColor}
-.application-status-menu{position:fixed;z-index:1000;width:232px;padding:6px;background:#fff;border:1px solid #e3e7ed;border-radius:10px;box-shadow:0 8px 28px #20212424;overflow-y:auto;overscroll-behavior:contain}
-.application-status-menu button{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 12px;border:0;border-radius:6px;font-size:14px;font-weight:400;text-align:left;background:transparent}
+.application-status-menu{position:absolute;left:0;z-index:1000;width:100%;min-width:184px;padding:6px;background:#fff;border:1px solid #e3e7ed;border-radius:10px;box-shadow:0 8px 28px #20212424;overflow-y:auto;overscroll-behavior:contain}
+.application-status-menu button{display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 10px;border:0;border-radius:5px;font-size:14px;font-weight:400;text-align:left;background:transparent;line-height:20px;flex-shrink:0}
 .application-status-menu button:hover,.application-status-menu button:focus-visible{background:#f1f5fb;outline:none}
 .application-status-menu button[aria-selected="true"]{background:#e8f0fe;color:#1967d2}
-.application-status-group{padding:10px 12px 5px;margin-top:5px;border-top:1px solid #edf0f4;color:#80868b;font-size:12px;font-weight:400}
+.application-status-group{padding:7px 10px 4px;margin-top:4px;border-top:1px solid #edf0f4;color:#80868b;font-size:12px;font-weight:400}
 .status-check{margin-left:auto;color:#1a73e8;min-width:16px;text-align:center}
 .mobile-filter-sheet .application-status-filter{width:100%}
+
+.application-status-trigger[aria-expanded="true"] .status-chevron{transform:rotate(180deg)}
+.status-chevron{flex-shrink:0;transition:transform .15s ease}
+.status-dot.stage-neutral{color:#9aa0a6}.status-dot.stage-interview{color:#1a73e8}.status-dot.stage-pending{color:#d29922}.status-dot.stage-feedback{color:#9359bb}.status-dot.stage-success{color:#34a853}
+.application-status-menu .status-dot{width:6px;height:6px;flex-basis:6px}
+.application-status-menu button>span:nth-child(2){flex:1;white-space:nowrap}
+.application-status-menu .status-check{flex:0 0 16px}
+@media(max-width:650px){.mobile-filter-sheet .application-status-trigger{height:44px}.mobile-filter-sheet .application-status-menu{max-width:100%}}

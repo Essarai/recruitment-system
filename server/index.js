@@ -1,3 +1,4 @@
+import {activatePendingArrangement} from './pending-arrangement.js';
 import {saveInterviewerReassignment} from './interviewer-reassignment.js';
 import {validatePortfolioFile} from './portfolio.js';
 import {saveCandidateChange} from './candidate-save.js';
@@ -95,6 +96,7 @@ app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async
   const people=await users(conn),actor=people.find(p=>p.id===req.user.id);
   if(!app||!actor||actor.frozen||actor.role!=='interviewer'||app.screening?.interviewer!==actor.name){await conn.rollback();return res.status(403).json({error:'无权确认此简历'});}
   app.screening=decideScreening(app,actor,req.body.decision,req.body.reason||'');
+  if(req.body.decision==='accepted')await activatePendingArrangement(conn,state,app,app.rounds[0],people);
   terminateFailedApplication(app,actor.name);
   app.history.unshift({at:new Date().toISOString(),actor:actor.name,action:app.screening.status==='needs_info'?`简历确认需 HR 补充：${app.screening.reason}`:app.screening.status==='accepted'?'简历确认通过':`简历筛选不通过：${app.screening.reason}`});
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);

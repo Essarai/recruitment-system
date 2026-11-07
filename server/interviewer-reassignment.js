@@ -1,3 +1,4 @@
+import {validateSchedule,calendarSources} from '../src/model.js';
 import {hasInterviewArrangement} from '../src/interview-arrangement.js';
 import {readState,users,visibleState} from './database.js';
 import {canManageApplication} from '../src/permissions.js';
@@ -14,14 +15,23 @@ export function reassignInterviewer(app,round,actor,people,body,now=new Date().t
  if(app.rounds.slice(index+1).some(r=>hasInterviewArrangement(r)||r.feedback.status!=='none'))throw Error('后续轮次已有安排或面评，不能回退更换');
  if(index>0&&!reviewSourceValid(app,round))throw Error('本轮审核来源已失效，请先处理上一轮结果');
  const name=text(body.interviewer,'新面试官',100,true),reason=text(body.reason,'更换原因',2000,true);
- if(name===round.interviewer)throw Error('请选择不同的面试官');
+ if(name===round.interviewer&&!(round.pendingArrangement?.status==='pending'&&(index===0?app.screening:round.review)?.status==='pending'))throw Error('请选择不同的面试官');
  if(!people.some(p=>p.name===name&&p.role==='interviewer'&&!p.frozen))throw Error('请选择启用的新面试官');
+ let arrangement;
+ if(body.arrangement){
+  const raw=body.arrangement;
+  arrangement={interviewer:name,time:text(raw.time,'待确认时间',40,true),location:text(raw.location,'待确认地点或链接',2000,true),mode:text(raw.mode,'面试方式',10,true),focus:text(raw.focus,'考察重点',2000),duration:raw.duration,calendarSource:raw.calendarSource};
+  if(!['线上','线下'].includes(arrangement.mode)||!Number.isInteger(arrangement.duration)||arrangement.duration<15||arrangement.duration>240||arrangement.duration%15||!Object.hasOwn(calendarSources,arrangement.calendarSource))throw Error('待确认安排的方式、时长或日程来源无效');
+  const test=structuredClone(app),target=test.rounds[index];test.screening={status:'skipped'};if(target.review)target.review.status='accepted';if(target.review)target.review.interviewer=name;
+  validateSchedule(test,target,arrangement,people.filter(p=>p.role==='interviewer'&&!p.frozen).map(p=>p.name));
+ }
  const old={interviewer:round.interviewer,time:round.time,location:round.location,mode:round.mode,review:round.review,screening:index===0?app.screening:undefined};
  round.scheduleEvents=[...(round.scheduleEvents||[]),{type:'reassigned',at:now,actorId:actor.id,actorName:actor.name,reason,previous:old}];
  Object.assign(round,{interviewer:name,time:'',location:'',cancelled:false});
  const epoch=new Date(Math.max(Date.parse(now),Date.parse((index===0?app.screening:round.review)?.sentAt||'')+1||0)).toISOString();
  const review={...(index===0?{}:round.review),status:'pending',interviewer:name,sentBy:actor.name,sentAt:epoch,reason:''};delete review.reviewedAt;delete review.reviewedBy;
  if(index===0)app.screening=review;else round.review=review;
+ if(arrangement)round.pendingArrangement={...arrangement,status:'pending',reviewEpoch:epoch};else delete round.pendingArrangement;
  app.history.unshift({at:now,actor:actor.name,action:`${round.name}更换面试官：${old.interviewer||'未指定'} → ${name}；原排期已撤销，重新审核简历；原因：${reason}`});
 }
 export async function saveInterviewerReassignment(pool,user,appId,body){

@@ -1,3 +1,4 @@
+import {activatePendingArrangement} from './pending-arrangement.js';
 import {readState,users,visibleState} from './database.js';
 import {canReviewRound} from '../src/round-review.js';
 import {endApplication} from '../src/model.js';
@@ -17,6 +18,7 @@ export async function saveRoundReview(pool,user,appId,roundId,body){
   const app=state.applications.find(a=>a.id===appId),round=app?.rounds.find(r=>r.id===roundId);
   if(!app||!round)throw Object.assign(Error('无权审核此简历'),{status:403});
   decideRoundReview(app,round,actor,body.decision,body.reason||'');
+  if(body.decision==='accepted')await activatePendingArrangement(conn,state,app,round,people);
   await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
   await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[actor.id,'确认下一轮简历',round.id]);await conn.commit();return visibleState(state,actor,people,revision+1);
  }catch(e){await conn.rollback();throw e;}finally{conn.release();}

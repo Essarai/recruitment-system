@@ -91,6 +91,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(r.hrProgression!==undefined&&!equal(r.hrProgression,oldRound?.hrProgression))throw Error('不能伪造或改写 HR 推进决定');
    if(oldRound?.hrProgression)result.hrProgression=structuredClone(oldRound.hrProgression);
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
+   if(r.pendingArrangement!==undefined&&!equal(r.pendingArrangement,oldRound?.pendingArrangement))throw Error('不能伪造待确认安排');
+   if(oldRound?.pendingArrangement&&!result.time)result.pendingArrangement=structuredClone(oldRound.pendingArrangement);
    if(oldRound?.scheduleEvents)result.scheduleEvents=structuredClone(oldRound.scheduleEvents);
    const changed=!oldRound||scheduleKeys.some(k=>oldRound[k]!==result[k])||(oldRound.cancelled&&!result.cancelled);
    if(changed){

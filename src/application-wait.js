@@ -1,7 +1,8 @@
 import {hasInterviewArrangement,isSpecialInterview} from './interview-arrangement.js';
 import {appointmentTime} from './availability.js';
 export function applicationWait(app,now=Date.now()){
- const until=app.status==='进行中'?now:Date.parse(app.endedAt);
+ if(app.status!=='进行中'||app.withdrawnAt||app.archivedAt)return null;
+ const until=now;
  if(!Number.isFinite(until))return null;
  const completed=app.rounds.filter(r=>hasInterviewArrangement(r)&&!r.cancelled).map(r=>({round:r,end:isSpecialInterview(r)?Date.parse(r.specialRecordedAt):appointmentTime(r.time)+(Number.isFinite(r.duration)&&r.duration>0?r.duration:60)*60000})).filter(r=>Number.isFinite(r.end)&&r.end<=until).sort((a,b)=>b.end-a.end)[0];
  const created=!completed&&['pending','needs_info'].includes(app.screening?.status)&&!app.rounds[0]?.time?Math.min(...(app.history||[]).filter(h=>h.action?.startsWith('创建应聘')).map(h=>Date.parse(h.at)).filter(Number.isFinite)):NaN;

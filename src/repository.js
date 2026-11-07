@@ -101,3 +101,7 @@ export async function endReviewedApplication(appId,roundId,reason){
 export async function progressInterview(appId,body){
  const result=await request(`/applications/${encodeURIComponent(appId)}/progression`,{method:'POST',body:JSON.stringify({...body,revision:baseline.revision})});baseline=structuredClone(result);return result;
 }
+
+export async function reassignInterviewer(appId,roundId,interviewer,reason){
+ const result=await request(`/applications/${encodeURIComponent(appId)}/reassign-interviewer`,{method:'POST',body:JSON.stringify({revision:baseline.revision,roundId,interviewer,reason,candidateIds:baseline.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-19)})});baseline=structuredClone(result);return result;
+}

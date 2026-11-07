@@ -1,3 +1,4 @@
+import {saveInterviewerReassignment} from './interviewer-reassignment.js';
 import {validatePortfolioFile} from './portfolio.js';
 import {saveCandidateChange} from './candidate-save.js';
 import {saveRecruitmentState} from './state-changes.js';
@@ -84,6 +85,7 @@ app.post('/api/users',admin,express.json({limit:'8kb'}),async(req,res)=>{
  const hash=await hashPassword(req.body.password);try{await pool.execute('INSERT INTO recruitment_users(id,username,name,role,password_hash) VALUES(?,?,?,?,?)',[randomUUID(),username,name,role,hash]);}catch(error){if(error.code==='ER_DUP_ENTRY')return res.status(409).json({error:'账号或姓名已存在，请使用唯一名称'});throw error;}res.json({ok:true});
 });
 app.post('/api/state',hr,express.json({limit:'8mb'}),async(req,res)=>res.json(await saveRecruitmentState(pool,req.user,req.body)));
+app.post('/api/applications/:appId/reassign-interviewer',hr,express.json({limit:'16kb'}),async(req,res)=>res.json(await saveInterviewerReassignment(pool,req.user,req.params.appId,req.body)));
 app.post('/api/applications/:appId/review-supplement',hr,express.json({limit:'16kb'}),async(req,res)=>res.json(await saveReviewSupplement(pool,req.user,req.params.appId,req.body)));
 app.patch('/api/applications/:appId/screening',express.json({limit:'8kb'}),async(req,res)=>{
  const conn=await pool.getConnection();try{

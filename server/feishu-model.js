@@ -30,7 +30,7 @@ export function reconcileFeishuJobs(state,existing,wanted,now=Date.now()){
  for(const old of existing)if(!map.has(old.id)){
   const a=state.applications.find(a=>a.id===old.application_id),round=a?.rounds.find(r=>r.id===old.round_id),external=old.kind==='round'&&(round?.calendarSource==='external'||round?.mode==='特殊');
   // An explicit source switch retires only the event previously created by this system.
-  if(!external&&old.kind==='round'&&(round?.feedback.status==='submitted'||old.desired.end<now&&a?.status==='进行中'&&!round?.cancelled))continue;
+  if(!external&&old.kind==='round'&&(round?.feedback.status==='submitted'||round?.time&&old.desired.end<now&&a?.status==='进行中'&&!round?.cancelled))continue;
   map.set(old.id,{...old.desired,active:false,...(external?{calendarSource:'external'}:{})});
  }
  return [...map.values()];

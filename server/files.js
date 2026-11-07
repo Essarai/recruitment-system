@@ -14,7 +14,7 @@ export async function signedResumeAccess(client,bucket,file){
  const {GetObjectCommand}=await import('@aws-sdk/client-s3');
  const {getSignedUrl}=await import('@aws-sdk/s3-request-presigner');
  const filename=encodeURIComponent(file.name).replace(/['()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase());
- const command=new GetObjectCommand({Bucket:bucket,Key:file.object_key,ResponseContentType:file.mime,ResponseContentDisposition:`${file.mime==='application/pdf'?'inline':'attachment'}; filename*=UTF-8''${filename}`,ResponseCacheControl:'private, no-store'});
+ const command=new GetObjectCommand({Bucket:bucket,Key:file.object_key,ResponseContentType:file.mime,ResponseContentDisposition:`${file.mime==='application/pdf'||['image/png','image/jpeg','image/webp'].includes(file.mime)?'inline':'attachment'}; filename*=UTF-8''${filename}`,ResponseCacheControl:'private, no-store'});
  return {url:await getSignedUrl(client,command,{expiresIn:300}),expiresAt:new Date(Date.now()+300000).toISOString(),name:file.name,type:file.mime};
 }
 

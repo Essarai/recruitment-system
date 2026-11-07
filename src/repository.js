@@ -28,7 +28,8 @@ export async function save(next,onProgress=()=>{},feedbackTarget=null,candidateT
  let result;
  if(candidateTarget&&isRecruiter(currentUser)){
   const candidate=next.candidates.find(c=>c.id===candidateTarget.id),originalCandidate=baseline.candidates.find(c=>c.id===candidateTarget.id);if(!candidate)throw Error('候选人不存在，请重新打开档案');
-  const body={mode:candidateTarget.mode,candidate:{...candidate},...(candidateTarget.mode==='profile'?{originalCandidate:originalCandidate&&!originalCandidate._summary?Object.fromEntries(['id','name','phone','email',...profileFields.map(([key])=>key),'notes'].map(key=>[key,originalCandidate[key]??''])):null}:{}),loadedCandidateIds:next.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-19)};
+  const body={mode:candidateTarget.mode,candidate:{...candidate},...(candidateTarget.mode==='profile'?{originalCandidate:originalCandidate&&!originalCandidate._summary?Object.fromEntries(['id','name','phone','email',...profileFields.map(([key])=>key),'notes','portfolios'].map(key=>[key,key==='portfolios'?originalCandidate[key]:originalCandidate[key]??''])):null}:{}),loadedCandidateIds:next.candidates.filter(c=>!c._summary).map(c=>c.id).slice(-19)};
+  if(body.candidate.portfolios)body.candidate.portfolios=await Promise.all(body.candidate.portfolios.map(async p=>({...p,...(p.attachment?.file instanceof File?{attachment:await request('/portfolios?name='+encodeURIComponent(p.attachment.file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:p.attachment.file})}:{})})));
   if(candidateTarget.mode!=='profile'){
    const pending=candidate.resumes?.filter(r=>r.file instanceof File)||[];if(pending.length!==1)throw Error('请选择一份简历文件');
    const file=pending[0].file;onProgress('正在上传简历…');

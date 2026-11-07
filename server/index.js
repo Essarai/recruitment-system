@@ -1,3 +1,4 @@
+import {validatePortfolioFile} from './portfolio.js';
 import {saveCandidateChange} from './candidate-save.js';
 import {saveRecruitmentState} from './state-changes.js';
 import {saveReviewSupplement} from './review-supplement.js';
@@ -107,6 +108,15 @@ app.patch('/api/applications/:appId/rounds/:roundId/feedback',express.json({limi
 });
 app.post('/api/resumes/parse',hr,express.raw({type:'application/octet-stream',limit:MAX_FILE}),async(req,res)=>{
  const name=text(req.query.name,'文件名',240,true);res.json(await parseResume(name,req.body));
+});
+app.post('/api/portfolios',hr,express.raw({type:'application/octet-stream',limit:MAX_FILE}),async(req,res)=>{
+ const name=text(req.query.name,'文件名',240,true);res.status(201).json(await storePrivateFile(pool,s3,bucket,req.user.id,name,req.body,validatePortfolioFile(name,req.body),'portfolios'));
+});
+app.get('/api/portfolios/:id',async(req,res)=>{
+ const {state}=await readState(pool);const candidate=state.candidates.find(c=>c.portfolios?.some(p=>p.attachment?.id===req.params.id));
+ if(!candidate||!isRecruiter(req.user)&&!state.applications.some(a=>a.candidateId===candidate.id&&canAccessResume(a,req.user)))return res.status(404).json({error:'作品附件不存在或无权访问'});
+ const [[file]]=await pool.execute("SELECT * FROM recruitment_files WHERE id=? AND object_key LIKE 'portfolios/%'",[req.params.id]);if(!file)return res.status(404).json({error:'作品附件不存在'});
+ const {url}=await signedResumeAccess(s3,bucket,{...file,...(req.query.download==='1'?{mime:'application/octet-stream'}:{})});res.set('Referrer-Policy','no-referrer');res.redirect(302,url);
 });
 app.post('/api/resumes',hr,express.raw({type:'application/octet-stream',limit:MAX_FILE}),async(req,res)=>{
  const name=text(req.query.name,'文件名',240,true);res.status(201).json(await storePrivateFile(pool,s3,bucket,req.user.id,name,req.body,validateResume(name,req.body),'resumes'));

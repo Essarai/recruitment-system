@@ -1,3 +1,4 @@
+import {validatePortfolios} from './portfolio.js';
 import {hasInterviewArrangement,isSpecialInterview} from '../src/interview-arrangement.js';
 import {activateRoundReviews} from '../src/round-review.js';
 import {applicationCreatorName} from '../src/permissions.js';
@@ -20,6 +21,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   const old=oldCandidates.get(c.id);if(old&&equal(old,c))return structuredClone(old);
   const {resumes,...profile}=c,{resumes:oldResumes,...oldProfile}=old||{};
   const result=old&&equal(oldProfile,profile)?structuredClone(old):{id:id(c.id),name:text(c.name,'姓名',100,true),...validateContacts({phone:text(c.phone,'手机号',64),email:text(c.email,'邮箱',254)}),...validateCandidateIntake(c)};
+  const portfolios=validatePortfolios(c.portfolios,files);if(portfolios!==undefined)result.portfolios=portfolios;else if(old?.portfolios)result.portfolios=old.portfolios;
   for(const [key] of profileFields)text(result[key],key,200);text(result.notes,'备注',2000);
   if(resumes||oldResumes){
    const versions=array(resumes||[],'简历版本',500);unique(versions,'简历版本');preserve(oldResumes||[],versions,'简历版本');

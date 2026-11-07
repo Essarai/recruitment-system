@@ -47,3 +47,11 @@ test('事务重新验证实时身份并在真实资料冲突时回滚',async()=>
  await assert.rejects(saveCandidateChange(pool,hr,{mode:'profile',candidate:{...original,company:'本地编辑'},originalCandidate:original}),e=>e.status===409);assert.equal(pool.writes,0);assert.equal(pool.rollback,1);
  for(const actor of [{...hr,frozen:1},{...hr,role:'interviewer'}]){const pool=poolFor(make(),actor);await assert.rejects(saveCandidateChange(pool,hr,{mode:'resume',candidate:{id:'c',resumes:[reference(files[1])]}}),e=>e.status===403);assert.equal(pool.writes,0);}
 });
+
+test('作品集随档案创建、编辑和删除保存；历史默认无作品，冲突不覆盖新作品',()=>{
+ const s=make(),input=candidate('new');input.portfolios=[{name:'案例',url:'https://example.com/work',description:'说明'}];
+ applyCandidateChange(s,{mode:'create',candidate:input},hr,files);const saved=s.candidates.find(c=>c.id==='new');assert.equal(saved.portfolios[0].name,'案例');assert.equal(s.candidates[0].portfolios,undefined);
+ const original=structuredClone(saved),edited={...saved,portfolios:[{name:'新作品',url:'https://example.com/new'}]};applyCandidateChange(s,{mode:'profile',candidate:edited,originalCandidate:original},hr,files);assert.equal(s.candidates.find(c=>c.id==='new').portfolios[0].name,'新作品');
+ assert.throws(()=>applyCandidateChange(s,{mode:'profile',candidate:{...original,portfolios:[]},originalCandidate:original},hr,files),e=>e.status===409);
+ const latest=structuredClone(s.candidates.find(c=>c.id==='new'));applyCandidateChange(s,{mode:'profile',candidate:{...latest,portfolios:[]},originalCandidate:latest},hr,files);assert.deepEqual(s.candidates.find(c=>c.id==='new').portfolios,[]);
+});

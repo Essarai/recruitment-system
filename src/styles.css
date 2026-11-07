@@ -288,3 +288,4 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 .shell{min-height:calc(100vh - var(--migration-notice-height))}
 @media(min-width:651px){.shell>aside{top:var(--migration-notice-height)}}
 @media(max-width:650px){:root{--migration-notice-height:112px}.migration-notice{padding:8px 16px;text-align:left}}
+.portfolio-entry{border:1px solid #e3e7ed;border-radius:8px;padding:16px;margin:12px 0}.portfolio-entry .section-heading{margin-bottom:12px}.portfolio-entry p{white-space:pre-wrap;overflow-wrap:anywhere}.portfolio-entry .actions{flex-wrap:wrap;gap:16px}.portfolio-editor,.portfolio-list{margin:20px 0}

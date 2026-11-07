@@ -14,7 +14,7 @@ export function applyCandidateChange(state,body,actor,files){
  if(!['create','profile','resume'].includes(mode))throw Error('请选择有效的档案保存操作');
  let candidate;
  if(mode==='create'){
-  candidate={id,...profile(body.candidate),resumes:body.candidate.resumes};
+  candidate={id,...profile(body.candidate),resumes:body.candidate.resumes,portfolios:body.candidate.portfolios};
   if(!Array.isArray(candidate.resumes)||candidate.resumes.length!==1)throw Error('请上传一份简历附件');
   if(old){if(equal(profile(old),profile(candidate))&&equal((old.resumes||[]).map(r=>r.id),candidate.resumes.map(r=>r.id)))return {id,changed:false};throw conflict('该候选人已保存，请核对最新档案后重试');}
  }else{
@@ -26,6 +26,7 @@ export function applyCandidateChange(state,body,actor,files){
    candidate.resumes=[attachment,...(old.resumes||[])];
   }else{
    if(body.originalCandidate?.id!==id||body.originalCandidate._summary)throw Error('请先读取完整候选人资料');
+   if(!equal(body.candidate.portfolios,body.originalCandidate.portfolios)){if(!equal(old.portfolios,body.originalCandidate.portfolios)&&!equal(old.portfolios,body.candidate.portfolios))throw conflict('作品集已被他人修改，请重新打开档案');candidate.portfolios=body.candidate.portfolios||[];}
    const original=profile(body.originalCandidate),edited=profile(body.candidate),current=profile(old);
    for(const key of fields)if(edited[key]!==original[key]){
     if(current[key]!==original[key]&&current[key]!==edited[key])throw conflict('该候选人的同一资料已被他人修改，本次内容尚未保存；请重新打开最新档案核对');
@@ -43,11 +44,11 @@ export async function saveCandidateChange(pool,user,body){
  const conn=await pool.getConnection();try{
   await conn.beginTransaction();const {state,revision}=await readState(conn,true),people=await users(conn),actor=people.find(p=>p.id===user.id);
   if(!actor||actor.frozen||!isRecruiter(actor))throw Object.assign(Error('账号权限已变化，请重新登录'),{status:403});
-  const id=text(body.candidate?.id,'候选人 ID',80,true),old=state.candidates.find(c=>c.id===id),references=[...(old?.resumes||[]),...(Array.isArray(body.candidate?.resumes)?body.candidate.resumes:[])];
+  const id=text(body.candidate?.id,'候选人 ID',80,true),old=state.candidates.find(c=>c.id===id),references=[...(old?.resumes||[]),...(old?.portfolios||[]).flatMap(p=>p.attachment?[p.attachment]:[]),...(body.candidate?.portfolios||[]).flatMap(p=>p.attachment?[p.attachment]:[]),...(Array.isArray(body.candidate?.resumes)?body.candidate.resumes:[])];
   if(references.length>501)throw Error('简历版本过多');
   const ids=[...new Set(references.map(r=>text(r?.id,'简历附件 ID',80,true)))];
-  const [files]=ids.length?await conn.query(`SELECT id,name,mime,size FROM recruitment_files WHERE object_key LIKE 'resumes/%' AND id IN (${ids.map(()=>'?').join(',')})`,ids):[[]];
-  const {changed}=applyCandidateChange(state,body,actor,files);
+  const [files]=ids.length?await conn.query(`SELECT id,name,mime,size,object_key,owner_id FROM recruitment_files WHERE (object_key LIKE 'resumes/%' OR object_key LIKE 'portfolios/%') AND id IN (${ids.map(()=>'?').join(',')})`,ids):[[]];
+  const {changed}=applyCandidateChange(state,body,actor,files.filter(f=>!f.object_key?.startsWith('portfolios/')||f.owner_id===actor.id||old?.portfolios?.some(p=>p.attachment?.id===f.id)));
   if(changed){
    await conn.execute('UPDATE recruitment_state SET revision=revision+1,payload=? WHERE id=1',[JSON.stringify(state)]);
    await conn.execute('INSERT INTO recruitment_audit(actor_id,action,target_id) VALUES(?,?,?)',[actor.id,{create:'导入候选人简历',profile:'编辑候选人资料',resume:'更新候选人简历'}[body.mode],id]);

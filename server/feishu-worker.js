@@ -1,4 +1,4 @@
-import {remindResumeReview} from './review-reminder.js';
+import {remindResumeReview,reviewReminderDue,reminderPolicyStartedAt} from './review-reminder.js';
 import {randomUUID} from 'node:crypto';
 import {createFeishuClient,feishuEnvironment,hash} from './feishu-client.js';
 import {feishuDesired,reconcileFeishuJobs,scheduleSignature,remoteSchedule,eventBody,reviewCard} from './feishu-model.js';
@@ -75,7 +75,9 @@ export function startFeishuWorker(pool,{env=process.env,client=createFeishuClien
     const remote=await syncFeishuJob(job,client,feishuEnvironment(env).origin,checkpoint);
     await conn.execute("UPDATE recruitment_feishu_jobs SET remote=?,applied_hash=desired_hash,status='synced',error='',attempts=0,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 60 SECOND) WHERE id=? AND desired_hash=?",[JSON.stringify(remote),job.id,job.desired_hash]);
    }catch(e){await conn.execute("UPDATE recruitment_feishu_jobs SET status='failed',attempts=attempts+1,error=?,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? SECOND) WHERE id=?",[(e.message||'同步失败').slice(0,300),Math.min(1800,15*2**Math.min(Number(row.attempts),7)),row.id]);}}
-   const [reviews]=await conn.query("SELECT * FROM recruitment_feishu_jobs WHERE kind='review' AND status='synced' AND next_at<=UTC_TIMESTAMP() ORDER BY next_at,id LIMIT 5");
+   const localReminderTime=new Date(Date.now()+8*3600000);
+   const [reviewRows]=localReminderTime.getUTCDay()>0&&localReminderTime.getUTCDay()<6&&localReminderTime.getUTCHours()===10&&localReminderTime.getUTCMinutes()<5?await conn.query("SELECT * FROM recruitment_feishu_jobs WHERE kind='review' AND status='synced' AND next_at<=UTC_TIMESTAMP() ORDER BY next_at,id"):[[]];
+   const reviews=reviewRows.filter(row=>{const job=jobRow(row),t=job.desired,due=reviewReminderDue(t.screeningAt);return t.active&&t.openId&&due>reminderPolicyStartedAt&&due<=Date.now()&&!(job.remote.reminderEpoch===t.screeningAt&&job.remote.reminderOpenId===t.openId);}).slice(0,5);
    for(const row of reviews){
     const job=jobRow(row);if(config.pilotUserId&&job.desired.userId!==config.pilotUserId)continue;
     const [[version]]=await conn.query('SELECT (SELECT revision FROM recruitment_state WHERE id=1) AS state_revision,(SELECT revision FROM recruitment_feishu_config WHERE id=1) AS config_revision');if(Number(version.state_revision)!==stateRevision||Number(version.config_revision)!==configRevision)break;

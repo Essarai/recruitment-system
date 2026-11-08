@@ -31,3 +31,12 @@ test('懒初始化只执行一次，未改变值不通知，重订阅和释放�
  store.set('filters','mine');stopAgain();
  assert.equal(initialized,1);assert.equal(calls,2);
 });
+
+test('捞起弹窗与简历库同时搜索时，搜索词、每页条数及分页独立，互不触发重置',()=>{
+ const store=createViewStateStore(),library={query:'徐逸',page:3,size:50},dialog={query:'',page:1,size:20};
+ store.set('library:paging',library,library);store.get('create-application:paging',dialog);
+ let libraryUpdates=0,dialogUpdates=0;store.subscribe('library:paging',()=>libraryUpdates++);store.subscribe('create-application:paging',()=>dialogUpdates++);
+ store.set('create-application:paging',{query:'徐',page:2,size:20},dialog);
+ assert.deepEqual(store.get('library:paging'),library);assert.equal(libraryUpdates,0);assert.equal(dialogUpdates,1);
+ store.set('library:paging',{...library,page:4},library);assert.equal(store.get('create-application:paging').query,'徐');assert.equal(dialogUpdates,1);
+});

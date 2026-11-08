@@ -13,7 +13,7 @@ export function CreateApplication({canManageTemplates=false,data,candidateId:ini
  const [resumeId,setResumeId]=useState(resumes[0]?.id||'');
  let notesError='';if(candidate){try{validateHRNotes(candidate.notes);}catch(e){notesError=e.message;}}
  const active=data.applications.find(a=>a.candidateId===candidateId&&a.status==='进行中');
- const {result,loading:searching,error:searchError,page,setPage}=useResumeSearch(query,data.revision);
+ const {result,loading:searching,error:searchError,page,setPage}=useResumeSearch(query,data.revision,20,'create-application:paging');
  const candidates=result?.items.map(row=>row.candidate)||[];
  if(candidate&&!candidates.some(c=>c.id===candidate.id))candidates.unshift(candidate);
  const template=data.templates.find(t=>t.id===templateId);

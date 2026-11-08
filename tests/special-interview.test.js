@@ -15,7 +15,7 @@ function record(s,actor=admin){const next=structuredClone(s);Object.assign(next.
 test('仅管理员可无时间地点补录特殊面试，登记时间服务端生成且不可伪造',()=>{
  const s=fixture();assert.throws(()=>record(s,hr),/仅管理员/);
  const saved=record(s),r=saved.applications[0].rounds[0];assert.ok(hasInterviewArrangement(r));assert.equal(r.time,'');assert.ok(Number.isFinite(Date.parse(r.specialRecordedAt)));
- const blocked=fixture();blocked.applications[0].screening={status:'pending',interviewer:'甲',reason:''};assert.throws(()=>record(blocked),/简历确认/);
+ const blocked=fixture();blocked.applications[0].screening={status:'pending',interviewer:'甲',reason:''};assert.equal(record(blocked).applications[0].screening.status,'skipped');
  const altered=structuredClone(saved);Object.assign(altered.applications[0].rounds[0],{mode:'线上',time:'2026-11-04T10:00',location:'https://example.com'});assert.throws(()=>validateHRState(saved,altered,names,[file],hr.name,names,hr),/仅管理员/);
  const forged=structuredClone(s);Object.assign(forged.applications[0].rounds[0],{mode:'特殊',specialRecordedAt:'2000-01-01',interviewer:'甲'});assert.throws(()=>validateHRState(s,forged,names,[file],admin.name,names,admin),/伪造/);
  const bad=structuredClone(s);Object.assign(bad.applications[0].rounds[0],{mode:'特殊',time:'2026-11-04T10:00',interviewer:'甲'});assert.throws(()=>validateHRState(s,bad,names,[file],admin.name,names,admin),/不填写时间/);
@@ -37,4 +37,13 @@ test('特殊面试正式面评沿用通过后下一轮审核、不通过终止�
   if(conclusion==='建议通过'){assert.equal(a.status,'进行中');assert.equal(a.rounds[1].review.status,'pending');}else{assert.equal(a.status,'未录用');assert.equal(a.rounds[1].cancelled,true);}
   assert.throws(()=>submitFeedback(a,a.rounds[0],'甲',{summary:'修改',conclusion}),/锁定/);
  }
+});
+
+test('管理员补录后续特殊面试不受待审核阻拦，原审核留档，普通排期仍须审核',()=>{
+ const s=fixture(),a=s.applications[0],r=a.rounds[1];a.rounds[0].feedback={status:'submitted',conclusion:'建议通过',submittedAt:'2026-11-01T00:00:00Z'};
+ r.review={status:'pending',interviewer:'甲',sourceRoundId:'r',sourceSubmittedAt:'2026-11-01T00:00:00Z'};
+ const input=structuredClone(s);Object.assign(input.applications[0].rounds[1],{mode:'特殊',interviewer:'甲'});
+ const saved=validateHRState(s,input,names,[file],admin.name,names,admin),special=saved.applications[0].rounds[1];assert.ok(special.specialRecordedAt);assert.equal(special.review,undefined);assert.equal(special.specialPreviousReview.status,'pending');
+ const view=visibleState(saved,person,[],1);assert.equal(interviewGroups(view,'甲')[0].feedback,1);assert.equal(interviewGroups(view,'甲')[0].reviews,0);assert.equal(view.applications[0].rounds[0].specialPreviousReview,undefined);
+ const normal=structuredClone(s);Object.assign(normal.applications[0].rounds[1],{time:'2099-11-08T10:00',location:'https://example.com',mode:'线上'});assert.throws(()=>validateHRState(s,normal,names,[file],admin.name,names,admin),/本轮简历审核/);
 });

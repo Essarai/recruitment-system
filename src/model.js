@@ -52,12 +52,12 @@ export const pending = app => app.rounds.filter(r=>hasInterviewArrangement(r)&&!
 export const nextInterview = app => app.status!=='进行中'?null:app.rounds.filter(r=>hasInterviewArrangement(r)&&!r.cancelled&&r.feedback.status!=='submitted'&&new Date(r.time)>new Date()).sort((a,b)=>a.time.localeCompare(b.time))[0];
 export function validateSchedule(app,r,data,people=null){
  if(data.calendarSource!==undefined&&(typeof data.calendarSource!=='string'||!Object.hasOwn(calendarSources,data.calendarSource)))throw Error('请选择有效的日程来源');
+ if(data.mode==='特殊'){if(app.status!=='进行中')throw Error('应聘已结束，不能补录');if(r.feedback.status==='submitted')throw Error('已有正式面评的安排不可修改');if(r.interviewer&&r.interviewer!==data.interviewer&&r.feedback.status!=='none')throw Error('已有面评草稿，不能更换面试官');if(!data.interviewer||(people&&!people.includes(data.interviewer))||data.time||data.location)throw Error('特殊面试须指定面试官，不填写时间和地点');return;}
  validateResumeConfirmation(app);
  if(app.status!=='进行中') throw Error('应聘已结束，不能新增或修改安排');
  if(app.rounds.findIndex(x=>x.id===r.id)>0&&(!hasInterviewArrangement(r)||r.review)){if(r.review?.status!=='accepted'||!reviewSourceValid(app,r))throw Error('请先完成本轮简历审核，再安排面试');if(data.interviewer!==r.review.interviewer)throw Error('更换面试官后须重新审核简历');}
  if(r.feedback.status==='submitted') throw Error('已有正式面评的安排不可修改，请增加一轮面试');
  if(r.interviewer&&r.interviewer!==data.interviewer&&r.feedback.status!=='none') throw Error('已有面评草稿，请先保留原安排并增加一轮');
- if(data.mode==='特殊'){if(!data.interviewer||(people&&!people.includes(data.interviewer))||data.time||data.location)throw Error('特殊面试须指定面试官，不填写时间和地点');return;}
  if(!data.interviewer||(people&&!people.includes(data.interviewer))||!data.time||!Number.isFinite(new Date(data.time).getTime())||!data.location.trim()) throw Error('请填写面试官、有效时间及地点或会议链接');
  if(data.mode==='线上'){let url;try{url=new URL(data.location);}catch{throw Error('请填写完整有效的会议链接');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('会议链接须为不含账号密码的 HTTP/HTTPS 地址');}
 }

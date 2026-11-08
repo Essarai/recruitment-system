@@ -90,6 +90,8 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
    if(oldRound?.review){result.review=structuredClone(oldRound.review);if(oldRound.interviewer!==result.interviewer){if(oldRound.review.status==='needs_info')throw Error('请先补充说明并重新送审，不能绕过待补充要求');if(hasInterviewArrangement(oldRound)||oldRound.feedback.status!=='none')throw Error('已有安排或面评，不能更换审核面试官');result.review={...result.review,status:'pending',interviewer:result.interviewer,reason:'',sentAt:now};delete result.review.reviewedAt;delete result.review.reviewedBy;}}else if(r.review)throw Error('不能伪造轮次审核结果');
    if(r.hrProgression!==undefined&&!equal(r.hrProgression,oldRound?.hrProgression))throw Error('不能伪造或改写 HR 推进决定');
    if(oldRound?.hrProgression)result.hrProgression=structuredClone(oldRound.hrProgression);
+   if(oldRound?.specialPreviousScreening)result.specialPreviousScreening=structuredClone(oldRound.specialPreviousScreening);
+   if(oldRound?.specialPreviousReview)result.specialPreviousReview=structuredClone(oldRound.specialPreviousReview);
    if(oldRound?.feedbackVersions)result.feedbackVersions=oldRound.feedbackVersions;
    if(r.pendingArrangement!==undefined&&!equal(r.pendingArrangement,oldRound?.pendingArrangement))throw Error('不能伪造待确认安排');
    if(oldRound?.pendingArrangement&&!result.time)result.pendingArrangement=structuredClone(oldRound.pendingArrangement);
@@ -101,9 +103,10 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
     if((result.mode==='特殊'||isSpecialInterview(oldRound))&&actorUser?.role!=='admin')throw Error('仅管理员可以登记或修改特殊面试');
     if(result.mode==='特殊'){
      if(result.time||result.location)throw Error('特殊面试不填写时间和地点');
-     result.specialRecordedAt=oldRound?.specialRecordedAt||now;
+     result.specialRecordedAt=oldRound?.specialRecordedAt||now;delete result.pendingArrangement;
+     if(result.review){result.specialPreviousReview=oldRound?.specialPreviousReview||structuredClone(result.review);delete result.review;}
     }else if(oldRound?.specialRecordedAt){delete result.specialRecordedAt;}
-    if(hasInterviewArrangement(result)){if(index>0&&!oldRound)throw Error('新增轮次须先完成本轮简历审核，再安排面试');validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
+    if(hasInterviewArrangement(result)){if(index>0&&!oldRound&&result.mode!=='特殊')throw Error('新增轮次须先完成本轮简历审核，再安排面试');validateSchedule(old?{...old,screening:next.screening}:next,oldRound||result,result,interviewers);}
     else if(hasInterviewArrangement(oldRound)||result.location||result.focus)throw Error('请完整填写面试安排');
    }
    if(old&&old.status!=='进行中'&&oldRound?.cancelled!==result.cancelled)throw Error('应聘已结束，不能变更安排');
@@ -124,6 +127,7 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   });
   if(!next.rounds.length)throw Error('至少保留一个面试节点');
   if(old){const removed=old.rounds.filter(r=>!next.rounds.some(n=>n.id===r.id));if(removed.some(r=>!canDeleteInterviewRound(old,r)))throw Error('仅可删除未安排且无面评记录的轮次');const retained=old.rounds.filter(r=>next.rounds.some(n=>n.id===r.id));if(retained.some((r,i)=>next.rounds[i]?.id!==r.id))throw Error('不能调整已有面试轮次顺序');if(old.status!=='进行中'&&next.rounds.length!==old.rounds.length)throw Error('应聘已结束，不能加面');}
+  if(next.rounds[0]?.mode==='特殊'&&next.screening&&next.screening.status!=='accepted'&&next.screening.status!=='skipped'){next.rounds[0].specialPreviousScreening=old?.rounds[0]?.specialPreviousScreening||structuredClone(next.screening);next.screening={status:'skipped',interviewer:'',reason:''};}
   activateRoundReviews(next,applicationCreatorName(old||next,actorUser?[actorUser]:[]),now);
   const compare=x=>{const {history,...record}=x;return JSON.parse(JSON.stringify(record));};
   if(!old||!equal(compare(old),compare(next))){

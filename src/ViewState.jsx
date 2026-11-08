@@ -7,6 +7,6 @@ export function ViewStateProvider({children}){
 }
 export function useViewState(key,initial){
  const shared=useContext(ViewStateContext),[local]=useState(createViewStateStore),store=shared||local;
- const value=useSyncExternalStore(listener=>store.subscribe(key,listener),()=>store.get(key,initial));
+ const value=useSyncExternalStore(listener=>store.subscribe(key,listener),()=>store.get(key,initial),()=>store.get(key,initial));
  return [value,next=>store.set(key,next,initial)];
 }

@@ -18,7 +18,7 @@ const existing=(desired,remote={})=>({id:desired.id,kind:desired.kind,applicatio
 test('日程来源由服务端校验并保留；历史未设置的同步方式在无关保存中不改变',()=>{
  const s=make(),unchanged=validate(s,visibleState(s,hr,people,1));assert.equal(Object.hasOwn(unchanged.applications[0].rounds[0],'calendarSource'),false);assert.equal(feishuDesired(unchanged,people,cfg,now).length,1);
  const legacyForm=visibleState(s,hr,people,1);legacyForm.applications[0].rounds[0].calendarSource='system';assert.deepEqual(validate(s,legacyForm),unchanged);
- const input=visibleState(s,hr,people,1);input.applications[0].rounds[0].calendarSource='external';const saved=validate(s,input),r=saved.applications[0].rounds[0];assert.equal(r.calendarSource,'external');assert.equal(r.scheduleEvents.at(-1).type,'calendarSourceChanged');assert.match(saved.applications[0].history[0].action,/日程来源：由系统同步飞书日程 → 已有飞书日程，仅登记/);
+ const input=visibleState(s,hr,people,1);input.applications[0].rounds[0].calendarSource='external';const saved=validate(s,input),r=saved.applications[0].rounds[0];assert.equal(r.calendarSource,'external');assert.equal(r.scheduleEvents.at(-1).type,'calendarSourceChanged');assert.match(saved.applications[0].history[0].action,/日程来源：由系统创建飞书日程 → 无需系统创建飞书日程/);
  const omitted=visibleState(saved,hr,people,2);delete omitted.applications[0].rounds[0].calendarSource;assert.equal(validate(saved,omitted).applications[0].rounds[0].calendarSource,'external');
  for(const value of ['bad','toString','',null,{},true]){const next=visibleState(s,hr,people,1);next.applications[0].rounds[0].calendarSource=value;assert.throws(()=>validate(s,next),/日程来源/);assert.throws(()=>validateSchedule(s.applications[0],s.applications[0].rounds[0],{...s.applications[0].rounds[0],calendarSource:value}),/日程来源/);}
 });

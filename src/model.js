@@ -38,7 +38,7 @@ export const results = ['进行中','公司决定录用','未录用','候选人�
 export const uid = () => crypto.randomUUID();
 export const blankFeedback = () => ({summary:'', strengths:'', concerns:'', conclusion:'', status:'none'});
 export const round = node => ({id:uid(),name:typeof node==='string'?node:node.name,interviewer:typeof node==='string'?'':node.interviewer||'',time:'',mode:'线上',location:'',focus:'',cancelled:false,feedback:blankFeedback()});
-export const calendarSources={external:'已有飞书日程，仅登记',system:'由系统同步飞书日程'};
+export const calendarSources={external:'无需系统创建飞书日程',system:'由系统创建飞书日程'};
 export function templateNodes(nodes,people=null){
  if(!Array.isArray(nodes)||!nodes.length)throw Error('请添加至少一个面试节点');
  const normalized=nodes.map(node=>({name:String(typeof node==='string'?node:node.name||'').trim(),interviewer:typeof node==='string'?'':node.interviewer||''}));

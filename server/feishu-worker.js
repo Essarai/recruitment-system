@@ -1,3 +1,4 @@
+import {syncArrangementNotice} from './arrangement-notice.js';
 import {remindResumeReview,reviewReminderDue,reminderPolicyStartedAt} from './review-reminder.js';
 import {randomUUID} from 'node:crypto';
 import {createFeishuClient,feishuEnvironment,hash} from './feishu-client.js';
@@ -6,6 +7,7 @@ import {readFeishuConfig,readJobs,jobRow} from './feishu-store.js';
 import {readState,users} from './database.js';
 const eventPath=remote=>'/calendar/v4/calendars/'+encodeURIComponent(remote.calendarId)+'/events/'+encodeURIComponent(remote.eventId);
 export async function syncFeishuJob(job,client,origin,checkpoint){
+ if(job.kind==='notice'||job.desired.kind==='notice')return syncArrangementNotice(job,client,origin,checkpoint);
  const t=job.desired,r={...job.remote};
  if(t.kind==='review'){
   if(r.reminderMessageId&&(!t.active||r.reminderOpenId!==t.openId||r.reminderEpoch!==t.screeningAt)){await client.call('/im/v1/messages/'+encodeURIComponent(r.reminderMessageId),{method:'PATCH',body:{content:JSON.stringify(reviewCard(t,origin,true))}});delete r.reminderMessageId;await checkpoint(r);}

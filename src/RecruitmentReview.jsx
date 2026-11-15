@@ -1,3 +1,4 @@
+import {useViewState} from './ViewState';
 import React,{useEffect,useRef,useState} from 'react';
 import {PaginatedList} from './PaginatedList';
 
@@ -44,7 +45,33 @@ function MetricDetails({metric,person,records,onClose,onOpen}){
 export function HRReview({rows,performance,records,onPerson,onOpenApplication,scopeKey}){
  const [selected,setSelected]=useState(null),[query,setQuery]=useState('');
  const totals=new Map(performance.map(p=>[p.id,p]));
- const visible=rows.filter(p=>p.name.toLowerCase().includes(query.trim().toLowerCase())).sort((a,b)=>(totals.get(b.id)?.joined||0)-(totals.get(a.id)?.joined||0)||b.created-a.created);
+ const [sort,setSort]=useViewState('dashboard:director-hr-sort',null);
+ const value=(n,d)=>d>0?n/d:null;
+ const columns={
+  completion:['完成率',p=>{const total=totals.get(p.id);return value(total?.joined,total?.target);}],
+  created:['新建应聘',p=>p.created],
+  resume:['简历审核通过率',p=>value(p.resumePassed,p.resumePassed+p.resumeFailed)],
+  interview:['面试通过率',p=>value(p.passed,p.passed+p.failed)],
+  conversion:['送审到约面',p=>value(p.sentScheduled,p.sent)],
+  booking:['约面及时率',p=>value(p.bookingOnTime,p.bookingSamples)]
+ };
+ const visible=rows.filter(p=>p.name.toLowerCase().includes(query.trim().toLowerCase())).sort((a,b)=>{
+  if(sort){
+   const metric=columns[sort.key][1],left=metric(a),right=metric(b);
+   if(left===null&&right!==null)return 1;
+   if(right===null&&left!==null)return -1;
+   if(left!==null&&right!==null&&left!==right)return sort.direction*(left-right);
+  }
+  return (totals.get(b.id)?.joined||0)-(totals.get(a.id)?.joined||0)||b.created-a.created||a.name.localeCompare(b.name,'zh-CN');
+ });
+ const sortHeader=key=>{
+  const active=sort?.key===key;
+  return <th scope="col" aria-sort={active?(sort.direction===1?'ascending':'descending'):undefined}>
+   <button type="button" className="analysis-sort" onClick={()=>setSort({key,direction:active?-sort.direction:-1})}>
+    {columns[key][0]}<span aria-hidden="true">{active?(sort.direction===1?' ↑':' ↓'):' ↕'}</span>
+   </button>
+  </th>;
+ };
  const person=selected&&selected.scopeKey===scopeKey&&rows.find(p=>p.id===selected.id);
  function metric(p,key,n,d){
   return <button className="text-button" aria-label={p.name+'的'+metrics[key]+' '+fraction(n,d)} onClick={()=>setSelected({id:p.id,key,scopeKey})}>{fraction(n,d)}</button>;
@@ -52,7 +79,7 @@ export function HRReview({rows,performance,records,onPerson,onOpenApplication,sc
  return <section className="dashboard-section">
   <div className="section-heading"><h2>HR 招聘复盘</h2>{rows.length>1&&<input aria-label="搜索 HR" placeholder="搜索 HR" value={query} onChange={e=>setQuery(e.target.value)}/>}</div>
   <p className="dashboard-note">目标和入职按目标月份。应聘量、通过率及转化率按筛选期间新建的应聘归属发起 HR，点击比例查看样本。约面及时率按可排期至首轮排期成功 ≤24 小时的有效记录计算。</p>
-  <PaginatedList items={visible} stateKey="dashboard:director-hr" resetKey={JSON.stringify([scopeKey,query])} label="HR 复盘">{page=><div className="table-wrap"><table className="analysis-hr-table director-hr-table"><thead><tr><th>归属人</th><th>涉及岗位</th><th>目标</th><th>入职</th><th>完成率</th><th>新建应聘</th><th>简历审核通过率</th><th>面试通过率</th><th>送审到约面</th><th>约面及时率</th><th>HR 超时</th></tr></thead><tbody>{page.map(p=>{
+  <PaginatedList items={visible} stateKey="dashboard:director-hr" resetKey={JSON.stringify([scopeKey,query,sort])} label="HR 复盘">{page=><div className="table-wrap"><table className="analysis-hr-table director-hr-table"><thead><tr><th>归属人</th><th>涉及岗位</th><th>目标</th><th>入职</th>{['completion','created','resume','interview','conversion','booking'].map(key=><React.Fragment key={key}>{sortHeader(key)}</React.Fragment>)}<th>HR 超时</th></tr></thead><tbody>{page.map(p=>{
    const t=totals.get(p.id);
    return <tr key={p.id}><td>{onPerson?<button className="text-button" onClick={()=>onPerson(p.id)}>{p.name}</button>:p.name}</td><td>{t?.positions?.join('、')||'—'}</td><td>{t?.target??'未设'}</td><td>{t?.joined??0}</td><td>{ratio(t?.joined,t?.target)}</td><td>{p.created}</td><td>{metric(p,'resume',p.resumePassed,p.resumePassed+p.resumeFailed)}</td><td>{metric(p,'interview',p.passed,p.passed+p.failed)}</td><td>{metric(p,'conversion',p.sentScheduled,p.sent)}</td><td>{fraction(p.bookingOnTime,p.bookingSamples)}</td><td>{t?.overdueHR??0}</td></tr>;
   })}</tbody></table></div>}</PaginatedList>

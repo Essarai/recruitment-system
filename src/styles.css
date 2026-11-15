@@ -288,4 +288,4 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 .dashboard-details>.analysis-record-filters{margin:12px 0}
 .analysis-record-filters label{display:inline-flex;align-items:center;gap:6px}
 
-.director-hr-table{min-width:1080px}.director-hr-table td:nth-child(2){min-width:130px;max-width:220px}.director-hr-table td:nth-child(n+3),.director-hr-table th{white-space:nowrap}.director-hr-table td .text-button{padding-inline:2px}
+.director-hr-table{min-width:950px}.director-hr-table td:nth-child(n+2),.director-hr-table th{white-space:nowrap}.director-hr-table td .text-button{padding-inline:2px}

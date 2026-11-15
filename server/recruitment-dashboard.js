@@ -119,7 +119,6 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
    waitingToJoin:offers.filter(r=>r.offer?.response==='accepted'&&!r.offer.joined).length,
    medianJoinDays:median(cycleDays),joinCycleSamples:cycleDays.length,
    overdue:queue.filter(r=>matches(r)&&r.overdue).length,
-   positions:[...new Set([...planned.map(r=>r.job),...cohort.filter(r=>(!jobName||r.app.job===jobName)&&(!ownerId||r.owner.id===ownerId)).map(r=>r.app.job),...joined.map(r=>r.job)])],
    overdueHR:queue.filter(r=>matches(r)&&r.overdue&&['schedule','decision'].includes(r.phase)).length
   };
  }

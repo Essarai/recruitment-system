@@ -102,8 +102,27 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
  if(!validDate(month+'-01'))throw Error('请选择有效的招聘目标月份');
  const offers=new Map((tracking.offers||[]).map(o=>[o.id,o]));
  const offerRecords=records.filter(({app})=>app.status==='公司决定录用').map(({app,owner})=>({
-  id:app.id,name:candidates.get(app.candidateId)?.name||'候选人已缺失',candidateId:app.candidateId,job:app.job,owner:owner.name,offer:offers.get(app.id)||null
+  id:app.id,name:candidates.get(app.candidateId)?.name||'候选人已缺失',candidateId:app.candidateId,job:app.job,owner:owner.name,ownerId:owner.id,offer:offers.get(app.id)||null
  }));
+ const recordById=new Map(records.map(r=>[r.app.id,r]));
+ function monthlyPerformance({job:jobName,ownerId}){
+  const matches=r=>(!jobName||r.job===jobName)&&(!ownerId||r.ownerId===ownerId);
+  const planned=goals.filter(matches),offers=offerRecords.filter(matches);
+  const joined=offers.filter(r=>r.offer?.joined?.startsWith(month));
+  const cycleDays=joined.map(r=>{
+   const start=recruitmentDay(recordById.get(r.id)?.created),end=r.offer.joined;
+   return start&&end>=start?(Date.parse(end)-Date.parse(start))/86400000:null;
+  }).filter(v=>v!==null);
+  return {
+   target:planned.length?planned.reduce((sum,g)=>sum+g.target,0):null,
+   joined:new Set(joined.map(r=>r.candidateId)).size,
+   waitingToJoin:offers.filter(r=>r.offer?.response==='accepted'&&!r.offer.joined).length,
+   medianJoinDays:median(cycleDays),joinCycleSamples:cycleDays.length,
+   overdue:queue.filter(r=>matches(r)&&r.overdue).length,
+   positions:[...new Set([...planned.map(r=>r.job),...cohort.filter(r=>(!jobName||r.app.job===jobName)&&(!ownerId||r.owner.id===ownerId)).map(r=>r.app.job),...joined.map(r=>r.job)])],
+   overdueHR:queue.filter(r=>matches(r)&&r.overdue&&['schedule','decision'].includes(r.phase)).length
+  };
+ }
  const goals=(tracking.goals||[]).filter(g=>g.month===month&&(!job||g.job===job)&&(!hr||g.ownerId===hr));
  const monthlyJobs=new Set([...goals.map(g=>g.job),...offerRecords.filter(r=>r.offer&&[r.offer.issued,r.offer.responded,r.offer.joined].some(date=>date?.startsWith(month))).map(r=>r.job)]);
  const monthly=[...monthlyJobs].sort().map(jobName=>{
@@ -114,28 +133,53 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
   const target=planned.length?planned.reduce((total,g)=>total+g.target,0):null;
   return {job:jobName,target,issued:issued.length,accepted,declined,joined};
  });
+ const reviewJobs=[...new Set([...monthlyJobs,...cohort.map(r=>r.app.job),...queue.map(r=>r.job),...offerRecords.filter(r=>r.offer?.response==='accepted'&&!r.offer.joined).map(r=>r.job)])];
+ const review={team:monthlyPerformance({}),jobs:reviewJobs.map(jobName=>({
+  job:jobName,...monthlyPerformance({job:jobName}),
+  owners:[...new Set([...goals.filter(g=>g.job===jobName).map(g=>people.find(p=>p.id===g.ownerId)?.name||'历史未归属'),...records.filter(r=>r.app.job===jobName).map(r=>r.owner.name)])]
+ })),people:[...groups.values()].map(p=>({id:p.id,...monthlyPerformance({ownerId:p.id})}))};
  const backlog=Object.entries(phases).filter(([key])=>key!=='interview').map(([key,phase])=>{
   const entries=queue.filter(r=>r.phase===key);
   return {key,name:phase.name,count:entries.length,overdue:entries.filter(r=>r.overdue).length,medianHours:median(entries.map(r=>r.waitHours).filter(n=>n!==null))};
  });
- return {backlog,tracking:{month,goals,monthly,offerRecords},imports:{records:importRecords,people:[...importPeople.values()],total:importRecords.length},analysis:recruitmentAnalysis(cohort,candidates,[...groups.values()]),generatedAt:new Date(nowTime).toISOString(),filters:{from,to,hr,job},overview:{created:cohort.length,ongoing:queue.length,hired:outcomes.hired,terminated:ended.length-outcomes.hired,imports:job?null:[...groups.values()].reduce((sum,g)=>sum+g.imported,0)},current:Object.entries(phases).map(([key,phase])=>({key,...phase,count:current[key]})),outcomes:Object.entries(outcomeNames).map(([key,name])=>({key,name,count:outcomes[key]})),hrRows:[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')),operations:{...operationCounts,people:[...operationPeople.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'))},conversion:{cohort:cohort.length,accepted,declined,pendingReview,skipped,scheduled,hired,ongoing:cohortOngoing},rounds:[...roundResults.values()].sort((a,b)=>a.index-b.index||a.name.localeCompare(b.name,'zh-CN')),efficiency:Object.entries(times).map(([key,values])=>({key,samples:values.length,medianHours:median(values)})),coverage,queue};
+ return {backlog,review,tracking:{month,goals,monthly,offerRecords},imports:{records:importRecords,people:[...importPeople.values()],total:importRecords.length},analysis:recruitmentAnalysis(cohort,candidates,[...groups.values()],offers),generatedAt:new Date(nowTime).toISOString(),filters:{from,to,hr,job},overview:{created:cohort.length,ongoing:queue.length,hired:outcomes.hired,terminated:ended.length-outcomes.hired,imports:job?null:[...groups.values()].reduce((sum,g)=>sum+g.imported,0)},current:Object.entries(phases).map(([key,phase])=>({key,...phase,count:current[key]})),outcomes:Object.entries(outcomeNames).map(([key,name])=>({key,name,count:outcomes[key]})),hrRows:[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')),operations:{...operationCounts,people:[...operationPeople.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'))},conversion:{cohort:cohort.length,accepted,declined,pendingReview,skipped,scheduled,hired,ongoing:cohortOngoing},rounds:[...roundResults.values()].sort((a,b)=>a.index-b.index||a.name.localeCompare(b.name,'zh-CN')),efficiency:Object.entries(times).map(([key,values])=>({key,samples:values.length,medianHours:median(values)})),coverage,queue};
 }
 
 // All panels use the same creation cohort; later progress is the current snapshot.
-export function recruitmentAnalysis(records,candidates,people){
- const stages=[['created','新建应聘'],['scheduled','已安排面试'],['submitted','已提交面评'],['passed','曾获通过面评'],['hired','公司决定录用']];
+export function recruitmentAnalysis(records,candidates,people,offers=new Map()){
+ const stages=[['created','新建应聘'],['scheduled','已安排面试'],['submitted','已提交面评'],['passed','曾获通过面评'],['hired','公司决定录用'],['offered','发出 Offer'],['offerAccepted','接受 Offer'],['joined','实际入职']];
  const rows=records.map(({app,owner,created})=>{
   const submitted=app.rounds.filter(r=>r.feedback.status==='submitted'),stage=applicationStage(app);
   const events=(app.history||[]).map(h=>({at:h.at,text:h.action,actor:h.actor}));
   const times=[created,app.endedAt,app.screening?.reviewedAt,...events.map(e=>e.at),...submitted.map(r=>r.feedback.submittedAt)].map(recruitmentTime).filter(t=>t!==null);
+  const offer=offers.get(app.id),first=app.rounds[0];
+  const booked=first?.scheduleEvents?.find(e=>e.type==='created'&&recruitmentTime(e.at)!==null);
+  const ready=app.screening?.status==='accepted'?app.screening.reviewedAt:app.screening?.status==='skipped'?created:null;
+  const bookingHours=first&&!isSpecialInterview(first)&&duration(created,ready)!==null?duration(ready,booked?.at):null;
+  const sent=Boolean(app.screening?.sentAt||app.screening?.interviewer&&['pending','needs_info','accepted','declined'].includes(app.screening.status));
+  const scheduled=app.rounds.some(r=>hasInterviewArrangement(r)||r.scheduleEvents?.some(e=>e.type==='created'));
   return {id:app.id,name:candidates.get(app.candidateId)?.name||'候选人已缺失',job:app.job,ownerId:owner.id,status:app.status,stage:stage.name,tone:stage.tone,created,lastAt:times.length?new Date(Math.max(...times)).toISOString():null,
-   reached:{created:true,scheduled:app.rounds.some(r=>hasInterviewArrangement(r)||r.scheduleEvents?.some(e=>e.type==='created')),submitted:submitted.length>0,passed:submitted.some(r=>r.feedback.conclusion==='建议通过'),hired:app.status==='公司决定录用'},
+   sent,bookingHours,reached:{created:true,scheduled,submitted:submitted.length>0,passed:submitted.some(r=>r.feedback.conclusion==='建议通过'),hired:app.status==='公司决定录用',offered:!!offer?.issued,offerAccepted:offer?.response==='accepted',joined:!!offer?.joined},
    passed:submitted.filter(r=>r.feedback.conclusion==='建议通过').length,failed:submitted.filter(r=>r.feedback.conclusion==='建议不通过').length,
    cycleHours:app.status==='进行中'||recruitmentTime(app.endedAt)===null||recruitmentTime(created)===null||recruitmentTime(app.endedAt)<recruitmentTime(created)?null:(recruitmentTime(app.endedAt)-recruitmentTime(created))/3600000,
    events,screening:app.screening?{status:app.screening.status,reviewedAt:app.screening.reviewedAt}:null,
    rounds:app.rounds.map(r=>({name:r.name,time:r.time,mode:r.mode,specialRecordedAt:r.specialRecordedAt,cancelled:!!r.cancelled,status:r.feedback.status,conclusion:r.feedback.status==='submitted'?r.feedback.conclusion:null,submittedAt:r.feedback.status==='submitted'?r.feedback.submittedAt:null}))};
  });
- function summary(list){const cycles=list.map(r=>r.cycleHours).filter(n=>n!==null),passed=list.reduce((n,r)=>n+r.passed,0),failed=list.reduce((n,r)=>n+r.failed,0);return {created:list.length,jobs:new Set(list.map(r=>r.job)).size,ongoing:list.filter(r=>r.status==='进行中').length,hired:list.filter(r=>r.reached.hired).length,terminated:list.filter(r=>!['进行中','公司决定录用'].includes(r.status)).length,exited:list.filter(r=>r.status==='候选人退出').length,submitted:list.filter(r=>r.reached.submitted).length,passed,failed,passRate:passed+failed?passed/(passed+failed):null,cycleHours:cycles.length?cycles.reduce((a,b)=>a+b,0)/cycles.length:null,cycleSamples:cycles.length};}
+ function summary(list){
+  const cycles=list.map(r=>r.cycleHours).filter(n=>n!==null);
+  const passed=list.reduce((n,r)=>n+r.passed,0),failed=list.reduce((n,r)=>n+r.failed,0);
+  const count=predicate=>list.filter(predicate).length;
+  const resumePassed=count(r=>r.screening?.status==='accepted'),resumeFailed=count(r=>r.screening?.status==='declined');
+  return {
+   created:list.length,jobs:new Set(list.map(r=>r.job)).size,
+   ongoing:count(r=>r.status==='进行中'),hired:count(r=>r.reached.hired),
+   terminated:count(r=>!['进行中','公司决定录用'].includes(r.status)),exited:count(r=>r.status==='候选人退出'),
+   submitted:count(r=>r.reached.submitted),passed,failed,passRate:passed+failed?passed/(passed+failed):null,
+   resumePassed,resumeFailed,sent:count(r=>r.sent),sentScheduled:count(r=>r.sent&&r.reached.scheduled),
+   bookingSamples:count(r=>r.bookingHours!==null),bookingOnTime:count(r=>r.bookingHours!==null&&r.bookingHours<=24),
+   cycleHours:cycles.length?cycles.reduce((a,b)=>a+b,0)/cycles.length:null,cycleSamples:cycles.length
+  };
+ }
  return {summary:summary(rows),people:people.map(p=>({id:p.id,name:p.name,role:p.role,frozen:!!p.frozen,...summary(rows.filter(r=>r.ownerId===p.id))})),jobs:[...new Set(rows.map(r=>r.job))].map(job=>({job,...summary(rows.filter(r=>r.job===job))})),funnel:stages.map(([key,name],i)=>{const members=rows.filter(r=>r.reached[key]),previous=i?rows.filter(r=>r.reached[stages[i-1][0]]):[];return {key,name,count:members.length,conversion:i&&previous.length&&members.every(r=>r.reached[stages[i-1][0]])?members.length/previous.length:null};}),records:rows};
 }
 

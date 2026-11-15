@@ -27,3 +27,13 @@ test('所有编辑弹窗实际渲染及失效目标降级，创建应聘和面�
   assert.doesNotThrow(()=>renderToString(React.createElement(MyInterviews,{data:{...data,applications:[],candidates:[]},person:'甲',query:'',date:()=>'',feedbackLabel:()=>''})));
  }finally{await vite.close();}
 });
+
+test('招聘复盘初始渲染展示三个比例与样本数，无需预选明细',async()=>{
+ const vite=await createServer({server:{middlewareMode:true},appType:'custom',logLevel:'silent'});
+ try{
+  const {HRReview}=await vite.ssrLoadModule('/src/RecruitmentReview.jsx');
+  const row={id:'a',name:'测试 HR',created:20,resumePassed:15,resumeFailed:5,passed:4,failed:1,sentScheduled:10,sent:20,bookingOnTime:3,bookingSamples:4};
+  const html=renderToString(React.createElement(HRReview,{rows:[row],performance:[],records:[]}));
+  for(const expected of ['75%（15/20）','80%（4/5）','50%（10/20）'])assert.ok(html.includes(expected),expected);
+ }finally{await vite.close();}
+});

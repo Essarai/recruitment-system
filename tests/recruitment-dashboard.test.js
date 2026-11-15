@@ -110,3 +110,22 @@ test('跟踪写入校验身份、实际日期顺序与并发修改',async()=>{
  assert.throws(()=>applyRecruitmentTracking(state,users,users[0],goal,today),e=>e.status===403);
  assert.equal(applyRecruitmentTracking(state,users,admin,goal,today),true);
 });
+
+test('总监复盘按入职月计数，三个 HR 转化指标按新建应聘批次计算',()=>{
+ const state=fixture();
+ state.applications[0].screening={status:'accepted',interviewer:'甲',sentAt:date('01'),reviewedAt:date('02')};
+ state.applications[0].rounds=[{...round('初试',date('04'),{status:'submitted',conclusion:'建议通过'}),scheduleEvents:[{type:'created',at:date('03')}]}];
+ state.recruitmentTracking={
+  goals:[{ownerId:'ha',month:'2026-10',job:'产品',target:3}],
+  contacts:[],offers:[{id:'b',issued:'2026-09-27',responded:'2026-10-01',joined:'2026-10-12',response:'accepted'}]
+ };
+ const result=buildRecruitmentDashboard(state,users,admin,{...period,month:'2026-10'},now);
+ const hr=result.analysis.people.find(p=>p.id==='ha');
+ assert.equal(hr.resumePassed,2);assert.equal(hr.resumeFailed,0);
+ assert.equal(hr.sentScheduled,1);assert.equal(hr.sent,1);
+ assert.equal(hr.bookingOnTime,2);assert.equal(hr.bookingSamples,2);
+ assert.equal(hr.passed,1);assert.equal(hr.failed,0);
+ assert.equal(result.review.team.target,3);assert.equal(result.review.team.joined,1);
+ assert.equal(result.review.team.medianJoinDays,22);
+ assert.equal(result.analysis.funnel.find(r=>r.key==='joined').count,0);
+});

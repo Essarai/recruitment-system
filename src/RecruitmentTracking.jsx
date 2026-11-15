@@ -57,10 +57,10 @@ function OfferForm({records,onSaved,today}){
  </details>;
 }
 
-export function RecruitmentOutcomes({result,admin,people,jobs,onSaved,onMonth,today}){
+export function RecruitmentOutcomes({result,admin,people,jobs,onSaved,today}){
  const {tracking,filters}=result;
  return <section className="dashboard-section">
-  <div className="section-heading"><h2>岗位目标、Offer 与入职</h2><label>目标月份 <input type="month" value={tracking.month} onChange={e=>{if(e.target.value)onMonth(e.target.value);}}/></label></div>
+  <div className="section-heading"><h2>岗位目标、Offer 与入职</h2></div>
   <p className="dashboard-note">按目标月统计，跟随归属人和岗位筛选。Offer 接受率按当月发出的 Offer 计算，入职按实际入职月统计。</p>
   <PaginatedList items={tracking.monthly} stateKey="dashboard:monthly" resetKey={JSON.stringify([tracking.month,filters.hr,filters.job])} label="岗位目标">{page=><div className="table-wrap"><table><thead><tr><th>岗位</th><th>目标</th><th>Offer 已发</th><th>接受</th><th>拒绝</th><th>待回复</th><th>接受率</th><th>实际入职</th><th>目标完成率</th><th>距目标</th></tr></thead><tbody>{page.map(r=><tr key={r.job}><td>{r.job}</td><td>{r.target??'未设'}</td><td>{r.issued}</td><td>{r.accepted}</td><td>{r.declined}</td><td>{r.issued-r.accepted-r.declined}</td><td>{percent(r.accepted,r.issued)}</td><td>{r.joined}</td><td>{percent(r.joined,r.target)}</td><td>{r.target===null?'—':Math.max(0,r.target-r.joined)}</td></tr>)}</tbody></table></div>}</PaginatedList>
   {admin&&filters.hr!=='unassigned'&&<GoalForm key={JSON.stringify([filters.hr,filters.job])} tracking={tracking} people={people} jobs={jobs} filters={filters} onSaved={onSaved}/>}

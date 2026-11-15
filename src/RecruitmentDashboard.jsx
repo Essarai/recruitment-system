@@ -1,3 +1,4 @@
+import {RecruitmentBacklog,RecruitmentOutcomes,ResumeConversion} from './RecruitmentTracking';
 import {useViewState} from './ViewState';
 import React,{useEffect,useRef,useState} from 'react';
 import {request} from './repository';
@@ -5,7 +6,7 @@ import {PaginatedList} from './PaginatedList';
 import {workExperienceLabel} from './model';
 import {canManageApplication} from './permissions';
 const today=()=>new Date(Date.now()+8*3600000).toISOString().slice(0,10);
-const defaults=()=>({from:today().slice(0,7)+'-01',to:today(),hr:'',job:''});
+const defaults=()=>({from:today().slice(0,7)+'-01',to:today(),hr:'',job:'',month:today().slice(0,7)});
 const rate=n=>n===null?'—':`${(n*100).toFixed(1)}%`;
 const days=n=>n===null?'—':`${(n/24).toFixed(1)} 天`;
 const date=t=>t?new Date(/T\d\d:\d\d$/.test(t)?t+'+08:00':t).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'未记录';
@@ -46,6 +47,9 @@ export function RecruitmentDashboard({data,user,onOpenApplication}){
   <p className="dashboard-scope muted">按北京时间筛选应聘创建日期；应聘模块统计同一批应聘的当前进展。{result&&`更新于 ${date(result.generatedAt)}${loading?' · 正在更新':''}`}</p>
   {error&&<div className="error" role="alert">{error}<button className="text-button" onClick={()=>setReload(n=>n+1)}>重试</button></div>}{loading&&!result&&<div className="loading" role="status">正在汇总招聘记录…</div>}
   {analysis&&<>
+   <RecruitmentBacklog result={result} onOpenApplication={onOpenApplication}/>
+   <RecruitmentOutcomes result={result} admin={admin} people={people} jobs={[...new Set([...jobs,...data.templates.map(t=>t.name)])]} today={today()} onSaved={()=>setReload(n=>n+1)} onMonth={month=>change('month',month)}/>
+   <ResumeConversion imports={result.imports} onSaved={()=>setReload(n=>n+1)}/>
    <section className="dashboard-section"><div className="section-heading"><h2>简历导入统计</h2><span className="muted">共 {result.imports?.total||0} 份</span></div><p className="dashboard-note">按首次创建人及简历创建日期统计，跟随时间与 HR 筛选，不受岗位筛选影响。点击数量查看具体简历及创建时间。</p><PaginatedList items={result.imports?.people||[]} stateKey={'dashboard-imports:'+detail} resetKey={scopeKey} label="HR 简历导入">{rows=><div className="table-wrap"><table><thead><tr><th>录入人</th><th>导入简历数</th><th>操作</th></tr></thead><tbody>{rows.map(p=><tr key={p.id}><td>{p.name}</td><td><button className="text-button" onClick={()=>setImportPerson(p)}>{p.count}</button></td><td><button className="text-button" onClick={()=>setImportPerson(p)}>查看明细</button></td></tr>)}</tbody></table></div>}</PaginatedList><p className="dashboard-note">{result.coverage.unknownImports} 份历史简历缺少创建人或有效创建时间，无法完整归属；不推测历史录入人。</p></section>
    <div className="analysis-kpis">{[['涉及岗位数',summary.jobs,'所选批次包含的岗位'],['新建应聘数',summary.created,'重新捞起计作新应聘'],['当前进行中',summary.ongoing,'这批应聘中尚未结束'],['已提交面评',summary.submitted,'按应聘去重'],['公司决定录用',summary.hired,'不代表实际入职'],['平均应聘结束用时',days(summary.cycleHours),`创建至结束 · ${summary.cycleSamples} 份有效样本`]].map(([label,value,hint])=><div key={label}><span>{label}</span><strong>{value}</strong><small>{hint}</small></div>)}</div>
    {!detail?<section className="dashboard-section"><div className="section-heading"><h2>HR 招聘表现对比</h2><input aria-label="搜索 HR" placeholder="搜索 HR" value={hrSearch} onChange={e=>setHRSearch(e.target.value)}/></div><PaginatedList items={hrRows} resetKey={JSON.stringify([scope,hrSearch,sort])} label="HR 表现">{rows=><div className="table-wrap"><table className="analysis-hr-table"><thead><tr>{sortHeader('归属人','name')}{sortHeader('涉及岗位','jobs')}{sortHeader('新建应聘','created')}{sortHeader('进行中','ongoing')}{sortHeader('公司决定录用','hired')}{sortHeader('流程终止','terminated')}{sortHeader('面评通过率','passRate')}{sortHeader('平均结束用时','cycleHours')}</tr></thead><tbody>{rows.map(p=><tr key={p.id}><td><button className="text-button" onClick={()=>openHR(p.id)}>{p.name}</button>{p.role==='admin'&&<small className="sub">管理员</small>}{p.frozen&&<small className="sub">已冻结</small>}</td><td>{p.jobs}</td><td>{p.created}</td><td>{p.ongoing}</td><td>{p.hired}</td><td>{p.terminated}{p.exited>0&&<small className="sub">其中 {p.exited} 人候选人退出</small>}</td><td><span className="analysis-rate">{rate(p.passRate)}{p.passRate!==null&&<span className="analysis-progress"><span style={{width:`${p.passRate*100}%`}}/></span>}</span></td><td>{days(p.cycleHours)}<small className="sub">{p.cycleSamples} 份样本</small></td></tr>)}</tbody></table></div>}</PaginatedList>{!hrRows.length&&<div className="empty">未找到符合条件的归属人</div>}<p className="dashboard-note">点击姓名进入个人详情。面评通过率按正式“建议通过 ÷（建议通过 + 建议不通过）”统计，待定、加面和草稿不计入分母。</p></section>:<>

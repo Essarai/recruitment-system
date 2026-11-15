@@ -1,3 +1,4 @@
+import {mountRecruitmentTracking} from './recruitment-tracking.js';
 import {activatePendingArrangement} from './pending-arrangement.js';
 import {saveInterviewerReassignment} from './interviewer-reassignment.js';
 import {validatePortfolioFile} from './portfolio.js';
@@ -76,6 +77,7 @@ app.post('/api/candidates/save',hr,express.json({limit:'64kb'}),async(req,res)=>
 mountFeishuRoutes(app,{pool,workerStatus:()=>feishuWorker.status()});
 mountWithdrawal(app,{pool});
 mountAvailability(app,{pool});
+mountRecruitmentTracking(app,pool);
 mountRecruitmentDashboard(app,{loadSnapshot:async()=>{const [{state},userList]=await Promise.all([readState(pool),users(pool)]);return {state,users:userList};}});
 app.post('/api/users/:id/password',admin,express.json({limit:'4kb'}),async(req,res)=>{const result=await resetAccountPassword(pool,req.user,req.params.id,req.body.password);if(req.params.id===req.user.id)res.clearCookie('recruitment_session',{path:'/api'});res.json(result);});
 app.patch('/api/users/:id/role',admin,express.json({limit:'1kb'}),async(req,res)=>res.json(await setAccountRole(pool,req.user,req.params.id,req.body.role)));

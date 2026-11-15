@@ -79,3 +79,34 @@ test('import drilldown uses immutable candidate owner/date, independent of job a
  assert.equal(own.imports.total,2);assert.ok(own.imports.records.every(r=>r.ownerId==='ha'));
  assert.throws(()=>buildRecruitmentDashboard(state,users,{id:'x',role:'interviewer'},period));
 });
+
+test('积压跨批次，月度入职独立于应聘创建时间，前置沟通和转化按候选人计',()=>{
+ const state=fixture();
+ state.recruitmentTracking={
+  goals:[{ownerId:'ha',month:'2026-10',job:'产品',target:4},{ownerId:'hb',month:'2026-10',job:'产品',target:6}],
+  contacts:[{id:'a',intent:'有意向',availability:'两周内',recommendation:'推进面试'}],
+  offers:[{id:'b',issued:'2026-09-27',responded:'2026-10-01',joined:'2026-10-12',response:'accepted'}]
+ };
+ const result=buildRecruitmentDashboard(state,users,users[0],{...period,hr:'hb',month:'2026-10'},now);
+ assert.equal(result.backlog.find(p=>p.key==='review').overdue,1);
+ assert.ok(result.queue.every(r=>r.ownerId==='ha'));
+ assert.deepEqual(result.tracking.monthly,[{job:'产品',target:4,issued:0,accepted:0,declined:0,joined:1}]);
+ assert.equal(result.imports.people[0].completed,1);
+ assert.equal(result.imports.people[0].applied,1);
+ assert.equal(result.imports.people[0].count,1);
+ assert.equal(result.tracking.offerRecords[0].id,'b');
+});
+test('跟踪写入校验身份、实际日期顺序与并发修改',async()=>{
+ const {applyRecruitmentTracking}=await import('../server/recruitment-tracking.js');
+ const state=fixture();state.templates=[{name:'产品'}];
+ const today='2026-10-19',offer={kind:'offer',id:'b',value:{issued:'2026-10-02',responded:'2026-10-03',response:'accepted',joined:'2026-10-08'}};
+ assert.throws(()=>applyRecruitmentTracking(state,users,users[0],{...offer,value:{...offer.value,joined:'2026-10-01'}},today),/顺序/);
+ assert.throws(()=>applyRecruitmentTracking(state,users,users[0],{...offer,id:'i'},today),/先在应聘详情/);
+ assert.equal(applyRecruitmentTracking(state,users,users[0],offer,today),true);
+ assert.equal(applyRecruitmentTracking(state,users,users[0],offer,today),false);
+ assert.throws(()=>applyRecruitmentTracking(state,users,users[0],{...offer,value:{...offer.value,joined:''}},today),e=>e.status===409);
+ assert.throws(()=>applyRecruitmentTracking(state,users,users[0],{kind:'contact',id:'d',value:{}},today),e=>e.status===403);
+ const goal={kind:'goal',id:'ha',value:{month:'2026-10',job:'产品',target:2}};
+ assert.throws(()=>applyRecruitmentTracking(state,users,users[0],goal,today),e=>e.status===403);
+ assert.equal(applyRecruitmentTracking(state,users,admin,goal,today),true);
+});

@@ -139,5 +139,5 @@ export function validateHRState(previous,input,interviewers,files,actor,activeIn
   return next;
  });
  unique(applications,'应聘记录');preserve(previous.applications,applications,'应聘记录');
- return {candidates,templates,applications};
+ return {...previous,candidates,templates,applications};
 }

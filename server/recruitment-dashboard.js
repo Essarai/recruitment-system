@@ -1,3 +1,4 @@
+import {reviewReminderDue} from './review-reminder.js';
 import {hasInterviewArrangement,isSpecialInterview} from '../src/interview-arrangement.js';
 import {pendingHRDecision,reviewSourceValid} from '../src/round-review.js';
 import {applicationStage} from '../src/model.js';
@@ -18,18 +19,19 @@ function currentPhase(app,created,now){
  if(app.status!=='进行中')return null;
  const screening=app.screening;
  if(screening?.status==='needs_info')return {key:'decision',round:'简历确认 · 需 HR 补充',since:screening.reviewedAt,clock:'距提出补充要求'};
- if(screening?.status==='pending')return {key:'review',round:'简历确认',since:screening.sentAt,clock:'距推送简历'};
+ if(screening?.status==='pending')return {key:'review',round:'简历确认',since:screening.sentAt,handler:screening.interviewer,clock:'距推送简历'};
  if(screening&&screening.status!=='skipped'&&screening.status!=='accepted')return {key:'schedule',round:'待指定简历确认人',since:created,clock:'距创建应聘'};
  const pending=pendingHRDecision(app);
  if(pending)return {key:'decision',round:`${pending.source.name} · ${pending.source.feedback.conclusion}`,since:pending.source.feedback.submittedAt,clock:'距本轮面评提交'};
  const index=app.rounds.findIndex(r=>r.feedback.status!=='submitted');
  if(index<0){const times=app.rounds.map(r=>recruitmentTime(r.feedback.submittedAt)).filter(v=>v!==null);return {key:'decision',round:'所有轮次面评已交',since:times.length?Math.max(...times):null,clock:'距最后面评提交'};}
  const round=app.rounds[index],time=recruitmentTime(round.time);
- if(isSpecialInterview(round)&&!round.cancelled)return {key:'feedback',round:round.name+' · 特殊',since:round.specialRecordedAt,clock:'距特殊面试补录'};
+ if(isSpecialInterview(round)&&!round.cancelled)return {key:'feedback',round:round.name+' · 特殊',since:round.specialRecordedAt,handler:round.interviewer,clock:'距特殊面试补录'};
  if(!round.time&&round.review?.status==='needs_info'&&reviewSourceValid(app,round))return {key:'decision',round:round.name+' · 需 HR 补充',since:round.review.reviewedAt,clock:'距提出补充要求'};
- if(!round.time&&round.review?.status==='pending'&&reviewSourceValid(app,round))return {key:round.review.interviewer?'review':'schedule',round:round.name+(round.review.interviewer?'简历审核':'待指定审核面试官'),since:round.review.sentAt,clock:'距发起本轮审核'};
- if(round.cancelled||time===null){const cancellation=[...(round.scheduleEvents||[])].reverse().find(e=>e.type==='cancelled');return {key:'schedule',round:round.name,since:cancellation?.at||(index?app.rounds[index-1].feedback.submittedAt:screening?.reviewedAt||created),clock:'距进入待安排'};}
- if(['draft','returned'].includes(round.feedback.status)||time<=now)return {key:'feedback',round:round.name,since:time,scheduledTime:round.time,clock:'距计划面试时间'};
+ if(!round.time&&round.review?.status==='pending'&&reviewSourceValid(app,round))return {key:round.review.interviewer?'review':'schedule',round:round.name+(round.review.interviewer?'简历审核':'待指定审核面试官'),since:round.review.sentAt,handler:round.review.interviewer,clock:'距发起本轮审核'};
+ if(round.cancelled||time===null){const cancellation=[...(round.scheduleEvents||[])].reverse().find(e=>e.type==='cancelled');return {key:'schedule',round:round.name,since:cancellation?.at||(round.review?.status==='accepted'&&round.review.reviewedAt)||(index?app.rounds[index-1].feedback.submittedAt:screening?.reviewedAt||created),clock:'距进入待安排'};}
+ const finish=time+(round.duration||60)*60000;
+ if(['draft','returned'].includes(round.feedback.status)||finish<=now)return {key:'feedback',round:round.name,since:finish,handler:round.interviewer,scheduledTime:round.time,clock:'距计划面试结束'};
  return {key:'interview',round:round.name,since:null,clock:'计划面试',scheduledTime:round.time};
 }
 function outcome(app){
@@ -56,7 +58,10 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
  const coverage={creationTime:records.filter(r=>!r.created).length,owner:records.filter(r=>r.owner.id==='unassigned').length,endTime:records.filter(r=>r.app.status!=='进行中'&&recruitmentTime(r.app.endedAt)===null).length,legacyScheduledRounds:0,unknownImports:state.candidates.filter(c=>(viewer.role!=='HR'||c.createdBy===viewer.id)&&(!c.createdBy||recruitmentTime(c.createdAt)===null)).length};
  for(const record of records){const {app,owner,created}=record,phase=currentPhase(app,created,nowTime);if(!phase)continue;
   const entry=group(owner);entry.ongoing++;current[phase.key]++;if(['schedule','decision'].includes(phase.key))entry.waitHR++;if(['review','feedback'].includes(phase.key))entry.waitInterviewer++;
-  const waitHours=duration(phase.since,nowTime);queue.push({id:app.id,candidateName:candidates.get(app.candidateId)?.name||'候选人已缺失',job:app.job,owner:owner.name,ownerId:owner.id,phase:phase.key,phaseName:phases[phase.key].name,party:phases[phase.key].party,round:phase.round,waitHours,clock:phase.clock,scheduledTime:phase.scheduledTime||null});
+  const waitHours=duration(phase.since,nowTime);
+  const reviewDue=reviewReminderDue(phase.since);
+  const overdue=phase.key==='review'?reviewDue!==null&&reviewDue<=nowTime:phase.key!=='interview'&&waitHours!==null&&waitHours>=24;
+  queue.push({id:app.id,candidateName:candidates.get(app.candidateId)?.name||'候选人已缺失',job:app.job,owner:owner.name,ownerId:owner.id,phase:phase.key,phaseName:phases[phase.key].name,party:phases[phase.key].party,round:phase.round,waitHours,overdue,handler:phase.handler||(['schedule','decision'].includes(phase.key)?owner.name:''),clock:phase.clock,scheduledTime:phase.scheduledTime||null});
  }
  for(const r of cohort)group(r.owner).created++;
  for(const r of ended){const key=outcome(r.app);outcomes[key]++;group(r.owner)[key==='hired'?'hired':'terminated']++;}
@@ -81,10 +86,39 @@ export function buildRecruitmentDashboard(state,users,viewer,filters={},now=Date
   app.rounds.forEach((r,index)=>{if(r.feedback.status!=='submitted')return;const key=`${index}:${r.name}`;if(!roundResults.has(key))roundResults.set(key,{key,index:index+1,name:r.name,passed:0,failed:0,additional:0,undecided:0,unknown:0});const row=roundResults.get(key);row[{'建议通过':'passed','建议不通过':'failed','建议加面':'additional','待定':'undecided'}[r.feedback.conclusion]||'unknown']++;});
  }
  queue.sort((a,b)=>Number(a.phase==='interview')-Number(b.phase==='interview')||(b.waitHours??-1)-(a.waitHours??-1));
- const importRecords=state.candidates.filter(c=>recruitmentTime(c.createdAt)!==null&&inPeriod(c.createdAt)&&(!hr||c.createdBy===hr||hr==='unassigned'&&!c.createdBy)).map(c=>{const owner=users.find(u=>u.id===c.createdBy);return {id:c.id,name:c.name,createdAt:c.createdAt,ownerId:c.createdBy||'unassigned',ownerName:owner?.name||'历史未归属'};}).sort((a,b)=>recruitmentTime(b.createdAt)-recruitmentTime(a.createdAt));
+ const tracking=state.recruitmentTracking||{};
+ const contacts=new Map((tracking.contacts||[]).map(r=>[r.id,r]));
+ const appliedIds=new Set(state.applications.filter(a=>!a.withdrawnAt&&(viewer.role!=='HR'||ownerOf(a,people).id===viewer.id)).map(a=>a.candidateId));
+ const importRecords=state.candidates.filter(c=>recruitmentTime(c.createdAt)!==null&&inPeriod(c.createdAt)&&(!hr||c.createdBy===hr||hr==='unassigned'&&!c.createdBy)).map(c=>{const owner=users.find(u=>u.id===c.createdBy);return {id:c.id,name:c.name,createdAt:c.createdAt,ownerId:c.createdBy||'unassigned',ownerName:owner?.name||'历史未归属',contact:contacts.get(c.id)||null,applied:appliedIds.has(c.id)};}).sort((a,b)=>recruitmentTime(b.createdAt)-recruitmentTime(a.createdAt));
  const importPeople=new Map(people.filter(p=>!hr||p.id===hr).map(p=>[p.id,{id:p.id,name:p.name,count:0}]));
- for(const r of importRecords){if(!importPeople.has(r.ownerId))importPeople.set(r.ownerId,{id:r.ownerId,name:r.ownerName,count:0});importPeople.get(r.ownerId).count++;}
- return {imports:{records:importRecords,people:[...importPeople.values()],total:importRecords.length},analysis:recruitmentAnalysis(cohort,candidates,[...groups.values()]),generatedAt:new Date(nowTime).toISOString(),filters:{from,to,hr,job},overview:{created:cohort.length,ongoing:queue.length,hired:outcomes.hired,terminated:ended.length-outcomes.hired,imports:job?null:[...groups.values()].reduce((sum,g)=>sum+g.imported,0)},current:Object.entries(phases).map(([key,phase])=>({key,...phase,count:current[key]})),outcomes:Object.entries(outcomeNames).map(([key,name])=>({key,name,count:outcomes[key]})),hrRows:[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')),operations:{...operationCounts,people:[...operationPeople.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'))},conversion:{cohort:cohort.length,accepted,declined,pendingReview,skipped,scheduled,hired,ongoing:cohortOngoing},rounds:[...roundResults.values()].sort((a,b)=>a.index-b.index||a.name.localeCompare(b.name,'zh-CN')),efficiency:Object.entries(times).map(([key,values])=>({key,samples:values.length,medianHours:median(values)})),coverage,queue};
+ for(const r of importRecords){
+  if(!importPeople.has(r.ownerId))importPeople.set(r.ownerId,{id:r.ownerId,name:r.ownerName,count:0});
+  const row=importPeople.get(r.ownerId);
+  row.count++;
+  row.completed=(row.completed||0)+Number(Boolean(r.contact?.intent&&r.contact.availability&&r.contact.recommendation));
+  row.applied=(row.applied||0)+Number(r.applied);
+ }
+ const month=String(filters.month||recruitmentDay(nowTime).slice(0,7));
+ if(!validDate(month+'-01'))throw Error('请选择有效的招聘目标月份');
+ const offers=new Map((tracking.offers||[]).map(o=>[o.id,o]));
+ const offerRecords=records.filter(({app})=>app.status==='公司决定录用').map(({app,owner})=>({
+  id:app.id,name:candidates.get(app.candidateId)?.name||'候选人已缺失',candidateId:app.candidateId,job:app.job,owner:owner.name,offer:offers.get(app.id)||null
+ }));
+ const goals=(tracking.goals||[]).filter(g=>g.month===month&&(!job||g.job===job)&&(!hr||g.ownerId===hr));
+ const monthlyJobs=new Set([...goals.map(g=>g.job),...offerRecords.filter(r=>r.offer&&[r.offer.issued,r.offer.responded,r.offer.joined].some(date=>date?.startsWith(month))).map(r=>r.job)]);
+ const monthly=[...monthlyJobs].sort().map(jobName=>{
+  const planned=goals.filter(g=>g.job===jobName),outcomes=offerRecords.filter(r=>r.job===jobName);
+  const issued=outcomes.filter(r=>r.offer?.issued?.startsWith(month));
+  const accepted=issued.filter(r=>r.offer.response==='accepted').length,declined=issued.filter(r=>r.offer.response==='declined').length;
+  const joined=new Set(outcomes.filter(r=>r.offer?.joined?.startsWith(month)).map(r=>r.candidateId)).size;
+  const target=planned.length?planned.reduce((total,g)=>total+g.target,0):null;
+  return {job:jobName,target,issued:issued.length,accepted,declined,joined};
+ });
+ const backlog=Object.entries(phases).filter(([key])=>key!=='interview').map(([key,phase])=>{
+  const entries=queue.filter(r=>r.phase===key);
+  return {key,name:phase.name,count:entries.length,overdue:entries.filter(r=>r.overdue).length,medianHours:median(entries.map(r=>r.waitHours).filter(n=>n!==null))};
+ });
+ return {backlog,tracking:{month,goals,monthly,offerRecords},imports:{records:importRecords,people:[...importPeople.values()],total:importRecords.length},analysis:recruitmentAnalysis(cohort,candidates,[...groups.values()]),generatedAt:new Date(nowTime).toISOString(),filters:{from,to,hr,job},overview:{created:cohort.length,ongoing:queue.length,hired:outcomes.hired,terminated:ended.length-outcomes.hired,imports:job?null:[...groups.values()].reduce((sum,g)=>sum+g.imported,0)},current:Object.entries(phases).map(([key,phase])=>({key,...phase,count:current[key]})),outcomes:Object.entries(outcomeNames).map(([key,name])=>({key,name,count:outcomes[key]})),hrRows:[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')),operations:{...operationCounts,people:[...operationPeople.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'))},conversion:{cohort:cohort.length,accepted,declined,pendingReview,skipped,scheduled,hired,ongoing:cohortOngoing},rounds:[...roundResults.values()].sort((a,b)=>a.index-b.index||a.name.localeCompare(b.name,'zh-CN')),efficiency:Object.entries(times).map(([key,values])=>({key,samples:values.length,medianHours:median(values)})),coverage,queue};
 }
 
 // All panels use the same creation cohort; later progress is the current snapshot.

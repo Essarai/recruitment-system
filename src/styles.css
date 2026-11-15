@@ -283,3 +283,7 @@ input[type="file"]::file-selector-button:hover{background:#f1f5fb}
 .portfolio-entry{border:1px solid #e3e7ed;border-radius:8px;padding:16px;margin:12px 0}.portfolio-entry .section-heading{margin-bottom:12px}.portfolio-entry p{white-space:pre-wrap;overflow-wrap:anywhere}.portfolio-entry .actions{flex-wrap:wrap;gap:16px}.portfolio-editor,.portfolio-list{margin:20px 0}
 
 .readonly-interviewer{min-height:40px;display:flex;align-items:center;padding:9px 11px;background:#f8fafd;border:1px solid #e4e9f0;border-radius:8px;color:#3c4043;font-size:14px;line-height:20px}
+
+.tracking-form{max-width:680px;margin:16px 0}
+.dashboard-details>.analysis-record-filters{margin:12px 0}
+.analysis-record-filters label{display:inline-flex;align-items:center;gap:6px}

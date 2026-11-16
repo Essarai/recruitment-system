@@ -1,3 +1,4 @@
+import {appointmentTime} from '../src/availability.js';
 import {syncArrangementNotice} from './arrangement-notice.js';
 import {remindResumeReview,reviewReminderDue,reminderPolicyStartedAt} from './review-reminder.js';
 import {randomUUID} from 'node:crypto';
@@ -42,6 +43,12 @@ export async function syncFeishuJob(job,client,origin,checkpoint){
  r.attendeeId=attendee?.attendee_id||r.attendeeId;r.rsvp=attendee?.rsvp_status||'needs_action';await checkpoint(r);
  return r;
 }
+export function shouldObserveFeishuJob(job,round,now=Date.now()){
+ const {desired,remote}=job;
+ if(!desired.active||desired.calendarSource==='external'||!remote.eventId||remote.closed||!(desired.end>now))return false;
+ if(!round||round.cancelled||round.calendarSource==='external'||round.mode==='特殊'||round.feedback?.status==='submitted')return false;
+ return appointmentTime(round.time)+(round.duration||60)*60000>now;
+}
 export async function observeFeishuJob(job,client){
  const r={...job.remote};if(job.desired.calendarSource==='external'||!r.eventId||r.closed||!job.desired.active)return r;
  const result=await client.call(eventPath(r));const event=result.event;if(!event)throw Error('无法读取飞书日程');
@@ -75,7 +82,7 @@ export function startFeishuWorker(pool,{env=process.env,client=createFeishuClien
    for(const row of pending){if(config.pilotUserId&&jobRow(row).desired.userId!==config.pilotUserId)continue;const [[version]]=await conn.query('SELECT (SELECT revision FROM recruitment_state WHERE id=1) AS state_revision,(SELECT revision FROM recruitment_feishu_config WHERE id=1) AS config_revision');if(Number(version.state_revision)!==stateRevision||Number(version.config_revision)!==configRevision)break;const job=jobRow(row);try{
     const checkpoint=remote=>conn.execute('UPDATE recruitment_feishu_jobs SET remote=? WHERE id=? AND desired_hash=?',[JSON.stringify(remote),job.id,job.desired_hash]);
     const remote=await syncFeishuJob(job,client,feishuEnvironment(env).origin,checkpoint);
-    await conn.execute("UPDATE recruitment_feishu_jobs SET remote=?,applied_hash=desired_hash,status='synced',error='',attempts=0,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 60 SECOND) WHERE id=? AND desired_hash=?",[JSON.stringify(remote),job.id,job.desired_hash]);
+    await conn.execute("UPDATE recruitment_feishu_jobs SET remote=?,applied_hash=desired_hash,status='synced',error='',attempts=0,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? SECOND) WHERE id=? AND desired_hash=?",[JSON.stringify(remote),job.kind==='round'?1800:60,job.id,job.desired_hash]);
    }catch(e){await conn.execute("UPDATE recruitment_feishu_jobs SET status='failed',attempts=attempts+1,error=?,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? SECOND) WHERE id=?",[(e.message||'同步失败').slice(0,300),Math.min(1800,15*2**Math.min(Number(row.attempts),7)),row.id]);}}
    const localReminderTime=new Date(Date.now()+8*3600000);
    const [reviewRows]=localReminderTime.getUTCDay()>0&&localReminderTime.getUTCDay()<6&&localReminderTime.getUTCHours()===10&&localReminderTime.getUTCMinutes()<5?await conn.query("SELECT * FROM recruitment_feishu_jobs WHERE kind='review' AND status='synced' AND next_at<=UTC_TIMESTAMP() ORDER BY next_at,id"):[[]];
@@ -86,8 +93,25 @@ export function startFeishuWorker(pool,{env=process.env,client=createFeishuClien
     try{const remote=await remindResumeReview(job,client,feishuEnvironment(env).origin);await conn.execute("UPDATE recruitment_feishu_jobs SET remote=?,error='',next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 300 SECOND) WHERE id=? AND desired_hash=?",[JSON.stringify(remote),job.id,job.desired_hash]);}
     catch(e){await conn.execute('UPDATE recruitment_feishu_jobs SET error=?,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 300 SECOND) WHERE id=? AND desired_hash=?',[(e.message||'简历提醒失败').slice(0,300),job.id,job.desired_hash]);}
    }
-   const [observe]=await conn.query("SELECT * FROM recruitment_feishu_jobs WHERE kind='round' AND status='synced' AND next_at<=UTC_TIMESTAMP() ORDER BY next_at LIMIT 5");
-   for(const row of observe){if(config.pilotUserId&&jobRow(row).desired.userId!==config.pilotUserId)continue;try{const job=jobRow(row),remote=await observeFeishuJob(job,client);await conn.execute('UPDATE recruitment_feishu_jobs SET remote=?,error=\'\',next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 60 SECOND) WHERE id=? AND desired_hash=? AND remote=CAST(? AS JSON)',[JSON.stringify(remote),job.id,job.desired_hash,JSON.stringify(job.remote)]);}catch(e){await conn.execute('UPDATE recruitment_feishu_jobs SET error=?,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 120 SECOND) WHERE id=?',[(e.message||'读取飞书状态失败').slice(0,300),row.id]);}}
+   const [observe]=await conn.query(`SELECT *, CAST(next_at AS CHAR) AS expected_next_at FROM recruitment_feishu_jobs
+    WHERE kind='round' AND status='synced' AND next_at<=UTC_TIMESTAMP()
+    AND JSON_EXTRACT(desired,'$.end')>UNIX_TIMESTAMP()*1000 ORDER BY next_at,id`);
+   const applications=new Map(state.applications.map(a=>[a.id,a]));
+   let observed=0;
+   for(const row of observe){
+    const job=jobRow(row),application=applications.get(job.application_id);
+    if(config.pilotUserId&&job.desired.userId!==config.pilotUserId)continue;
+    if(application?.status!=='进行中'||application.withdrawnAt||!shouldObserveFeishuJob(job,application.rounds.find(r=>r.id===job.round_id)))continue;
+    const [[version]]=await conn.query('SELECT (SELECT revision FROM recruitment_state WHERE id=1) AS state_revision,(SELECT revision FROM recruitment_feishu_config WHERE id=1) AS config_revision');
+    if(Number(version.state_revision)!==stateRevision||Number(version.config_revision)!==configRevision)break;
+    try{
+     const remote=await observeFeishuJob(job,client);
+     await conn.execute("UPDATE recruitment_feishu_jobs SET remote=?,error='',next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 30 MINUTE) WHERE id=? AND desired_hash=? AND next_at=? AND remote=CAST(? AS JSON)",[JSON.stringify(remote),job.id,job.desired_hash,row.expected_next_at,JSON.stringify(job.remote)]);
+    }catch(e){
+     await conn.execute("UPDATE recruitment_feishu_jobs SET error=?,next_at=DATE_ADD(UTC_TIMESTAMP(),INTERVAL 30 MINUTE) WHERE id=? AND desired_hash=? AND next_at=?",[(e.message||'读取飞书状态失败').slice(0,300),job.id,job.desired_hash,row.expected_next_at]);
+    }
+    if(++observed>=5)break;
+   }
   }catch(error){lastError=String(error.code||'SYNC_ERROR');if(conn)try{await conn.rollback();}catch{}console.error('Feishu background sync failed; will retry',{code:lastError});}
   finally{if(locked)try{await conn.query("SELECT RELEASE_LOCK('recruitment-feishu-worker')");}catch{}conn?.release();running=false;lastFinished=new Date().toISOString();}
  }

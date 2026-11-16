@@ -59,3 +59,22 @@ test('single-account pilot persists when environment scope is absent; administra
  assert.throws(()=>validateFeishuConfig({...base,pilotUserId:'missing'},people,old,true),/有效的试用面试官/);
  assert.throws(()=>validateFeishuConfig(base,[{...people[0],frozen:true}],old,true),/有效的试用面试官/);
 });
+
+test('后台只核对仍有效且未交面评的日程，结束时立即停止',async()=>{
+ const {shouldObserveFeishuJob}=await import('../server/feishu-worker.js');
+ const time='2026-11-16T10:00',end=Date.parse('2026-11-16T11:00+08:00');
+ const round={time,duration:60,feedback:{status:'none'}};
+ const job={desired:{active:true,end},remote:{eventId:'actual-event'}};
+ assert.equal(shouldObserveFeishuJob(job,round,end-1),true);
+ assert.equal(shouldObserveFeishuJob(job,round,end),false);
+ assert.equal(shouldObserveFeishuJob(job,{...round,feedback:{status:'submitted'}},end-1),false);
+ assert.equal(shouldObserveFeishuJob(job,{...round,cancelled:true},end-1),false);
+ assert.equal(shouldObserveFeishuJob(job,{...round,time:''},end-1),false);
+ assert.equal(shouldObserveFeishuJob(job,{...round,calendarSource:'external'},end-1),false);
+});
+test('飞书日程变更使用业务日程 ID，缺失时不扩大刷新范围',async()=>{
+ const {changedFeishuEventId}=await import('../server/feishu-routes.js');
+ assert.equal(changedFeishuEventId({calendar_id:'calendar',calendar_event_id:'actual-event'}),'actual-event');
+ assert.equal(changedFeishuEventId({calendar_id:'calendar'}),null);
+ assert.equal(changedFeishuEventId({calendar_event_id:'x'.repeat(201)}),null);
+});

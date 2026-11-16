@@ -17,6 +17,10 @@ export function validateFeishuConfig(input,people,old,ready,now=new Date().toISO
  // Binding identities are server-owned and can only be changed through self OAuth.
  return {...old,enabled:input.enabled,allowAttendeeEdit:input.allowAttendeeEdit,calendarId:input.calendarId.trim(),bindings:old.bindings,pilotUserId,enabledAt:old.enabledAt||input.enabled&&now||null};
 }
+export function changedFeishuEventId(payload){
+ const id=payload?.calendar_event_id||payload?.event_id;
+ return typeof id==='string'&&id.length>0&&id.length<=200?id:null;
+}
 export function mountFeishuCallback(app,{pool,env=process.env}){
  app.post('/api/feishu/events',express.raw({type:'application/json',limit:'128kb'}),async(req,res)=>{
   let event;try{event=verifyFeishuEvent(req.body,req.headers,env);}catch{return res.status(403).json({error:'回调验证失败'});}
@@ -24,7 +28,10 @@ export function mountFeishuCallback(app,{pool,env=process.env}){
   if(event.header?.event_type!=='calendar.calendar.event.changed_v4'&&event.header?.event_type!=='calendar.event.changed_v4')return res.json({code:0});
   const id=event.header.event_id;if(typeof id!=='string'||id.length>200)return res.status(400).json({error:'事件 ID 无效'});
   const [result]=await pool.execute('INSERT IGNORE INTO recruitment_feishu_inbox(event_id) VALUES(?)',[id]);
-  if(result.affectedRows)await pool.query("UPDATE recruitment_feishu_jobs SET next_at=UTC_TIMESTAMP() WHERE kind='round' AND status='synced'");
+  const eventId=changedFeishuEventId(event.event);
+  if(result.affectedRows&&eventId)await pool.execute(`UPDATE recruitment_feishu_jobs SET next_at=UTC_TIMESTAMP()
+   WHERE kind='round' AND status='synced' AND JSON_EXTRACT(desired,'$.end')>UNIX_TIMESTAMP()*1000
+   AND JSON_UNQUOTE(JSON_EXTRACT(remote,'$.eventId')) = ?`,[eventId]);
   res.json({code:0});
  });
 }
